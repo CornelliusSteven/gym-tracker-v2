@@ -1,0 +1,488 @@
+body[data-theme="dark"] {
+  --bg: #111315;
+  --panel: #1a1d20;
+  --ink: #f2f3f5;
+  --muted: #a8afb7;
+  --accent: #f3a530;
+  --accent-2: #f2b650;
+  --danger: #ff6c7a;
+  --line: #333940;
+  --control-bg: #252a2f;
+  --control-ink: #f2f3f5;
+  --input-bg: #121518;
+  --input-ink: #f2f3f5;
+  --card-bg: #20252a;
+  --card-selected-bg: #2f2b1d;
+  --active-ink: #171a1d;
+}
+
+body[data-theme="pastel"] {
+  --bg: #ffeef4;
+  --panel: #fff7fb;
+  --ink: #5a2c42;
+  --muted: #8e5f78;
+  --accent: #ec7da8;
+  --accent-2: #f09dbf;
+  --danger: #b84570;
+  --line: #efbfd2;
+  --control-bg: #f9dce8;
+  --control-ink: #5a2c42;
+  --input-bg: #fff3f8;
+  --input-ink: #5a2c42;
+  --card-bg: #fbe5ee;
+  --card-selected-bg: #f4c7db;
+  --active-ink: #fff9fb;
+}
+
+body[data-theme="royal"] {
+  --bg: #1f1730;
+  --panel: #2d203b;
+  --ink: #f3e8d6;
+  --muted: #cdbda6;
+  --accent: #a35ce0;
+  --accent-2: #be7ff0;
+  --danger: #d86d79;
+  --line: #6b4f3e;
+  --control-bg: #3c2b4d;
+  --control-ink: #f3e8d6;
+  --input-bg: #24192f;
+  --input-ink: #f3e8d6;
+  --card-bg: #322340;
+  --card-selected-bg: #4f3152;
+  --active-ink: #f3e8d6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Manrope", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 10% 10%, rgba(255, 191, 71, 0.12), transparent 38%),
+    radial-gradient(circle at 80% 0%, rgba(132, 146, 166, 0.12), transparent 35%),
+    var(--bg);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0 0 0.4rem;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+}
+
+p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.2rem;
+  display: grid;
+  gap: 1rem;
+  min-height: 100vh;
+  align-content: start;
+}
+
+.auth-shell {
+  place-items: center;
+}
+
+.auth-panel {
+  width: min(980px, 100%);
+  display: grid;
+  gap: 1rem;
+  padding: 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.auth-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.tab,
+button {
+  border: 1px solid var(--line);
+  background: var(--control-bg);
+  color: var(--control-ink);
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+  font-weight: 700;
+  font-family: "Manrope", sans-serif;
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.tab:hover,
+button:hover {
+  transform: translateY(-1px);
+}
+
+.tab.active {
+  background: var(--accent);
+  color: var(--active-ink);
+  border-color: var(--accent);
+}
+
+.ghost {
+  background: transparent;
+}
+
+.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.content {
+  display: grid;
+  gap: 1rem;
+}
+
+.dashboard-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.muscle-management-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1rem;
+  background: var(--panel);
+  display: grid;
+  gap: 0.8rem;
+  animation: reveal 220ms ease;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.metric {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.9rem;
+  background: linear-gradient(160deg, #1f2328 35%, #2a2f36 100%);
+  display: grid;
+  gap: 0.4rem;
+}
+
+.metric p {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+body[data-theme="pastel"] .metric h3 {
+  color: #fffdfd;
+}
+
+label {
+  display: grid;
+  gap: 0.4rem;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+  font: inherit;
+  color: var(--input-ink);
+  background: var(--input-bg);
+}
+
+select[multiple] {
+  min-height: 130px;
+}
+
+.list-item {
+  display: grid;
+  gap: 0.2rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.65rem;
+}
+
+.list-item:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.inline-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.hint {
+  font-size: 0.88rem;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+  gap: 0.7rem;
+}
+
+.calendar-day {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.8rem;
+  display: grid;
+  gap: 0.35rem;
+  min-height: 90px;
+}
+
+.calendar-day strong {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1.05rem;
+}
+
+.game-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.game-stat {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.3rem;
+  background: color-mix(in srgb, var(--panel) 82%, var(--accent) 18%);
+}
+
+.game-stat span {
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.xp-track {
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--panel) 85%, var(--line) 15%);
+}
+
+.xp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+
+.share-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1rem;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--panel) 80%, var(--accent) 20%), var(--panel));
+  display: grid;
+  gap: 0.9rem;
+}
+
+.share-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.share-grid div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.65rem;
+  display: grid;
+  gap: 0.25rem;
+  background: color-mix(in srgb, var(--panel) 86%, var(--line) 14%);
+}
+
+.share-grid strong {
+  font-size: 0.85rem;
+}
+
+.gym-day {
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+}
+
+.rest-day {
+  background: color-mix(in srgb, var(--line) 22%, var(--panel));
+}
+
+.theme-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.theme-picker-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.theme-label {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.theme-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.theme-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #ffffff50;
+  padding: 0;
+  background: linear-gradient(145deg, #111315 0%, #f3a530 100%);
+}
+
+.theme-dot.pastel {
+  background: linear-gradient(145deg, #ffd6e5 0%, #fff7fa 100%);
+}
+
+.theme-dot.royal {
+  background: linear-gradient(145deg, #5a2f88 0%, #7b4d35 100%);
+}
+
+.theme-dot.active {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.cta-add-workout {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+  color: var(--active-ink);
+  font-size: 1rem;
+  font-weight: 800;
+  padding: 0.85rem 1rem;
+}
+
+.focus-trained {
+  color: var(--accent-2);
+  font-weight: 700;
+}
+
+.muscle-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.6rem;
+}
+
+.muscle-card {
+  display: block;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.muscle-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.muscle-card-body {
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.8rem;
+  background: var(--card-bg);
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.muscle-card:hover {
+  transform: translateY(-1px);
+}
+
+.muscle-card:hover .muscle-card-body {
+  border-color: var(--accent);
+}
+
+.muscle-card input:checked + .muscle-card-body {
+  border-color: var(--accent);
+  background: var(--card-selected-bg);
+  color: var(--ink);
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 900px) {
+  .auth-grid,
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-row {
+    grid-template-columns: 1fr;
+  }
+  .muscle-management-grid {
+    grid-template-columns: 1fr;
+  }
+  .game-grid {
+    grid-template-columns: 1fr;
+  }
+  .share-grid {
+    grid-template-columns: 1fr;
+  }
+  .tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .tabs {
+    grid-template-columns: 1fr;
+  }
+  .topbar {
+    align-items: start;
+    flex-direction: column;
+  }
+}
