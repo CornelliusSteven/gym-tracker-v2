@@ -443,11 +443,11 @@ select[multiple] {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   border-color: transparent;
   color: var(--active-ink);
-  font-size: 1.35rem;
+  font-size: 1rem;
   font-weight: 800;
-  padding: 1.25rem 1rem;
+  padding: 0.85rem 1rem;
   width: fit-content;
-  min-width: 180px;
+  min-width: 140px;
 }
 
 .focus-trained {
