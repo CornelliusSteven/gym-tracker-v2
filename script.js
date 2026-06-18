@@ -311,7 +311,7 @@ function computeAnalytics() {
     }
   });
 
-  const xp = uniqueDates.length * 10;
+  const xp = uniqueDates.length * 20;
   return {
     sessions: state.sessions,
     weekGymDays: weekDays.size,
@@ -454,13 +454,12 @@ function renderDashboard(analytics) {
     <div class="panel">
       <h2>Streak Game</h2>
       <div class="game-grid">
-        <div class="game-stat"><strong>XP</strong><span>${analytics.xp}</span></div>
         <div class="game-stat"><strong>Level</strong><span>${analytics.level}</span></div>
-        <div class="game-stat"><strong>Weekly Streak</strong><span>${analytics.weeklyStreak}</span></div>
+        <div class="game-stat"><strong>Weekly Gym Streak</strong><span>${analytics.weeklyStreak}</span></div>
       </div>
-      <p>${analytics.xpIntoLevel}/100 XP to next level</p>
+      <p>${analytics.xp} total XP - ${analytics.xpIntoLevel}/100 XP to next level</p>
       <div class="xp-track"><div class="xp-fill" style="width:${analytics.xpIntoLevel}%"></div></div>
-      <p>Rule: +10 XP per gym day. Weekly streak counts active weeks from Monday to Sunday.</p>
+      <p>Rule: +20 XP per gym session. Weekly streak counts active weeks from Monday to Sunday.</p>
     </div>
     <div class="dashboard-row">
       <div class="panel">
