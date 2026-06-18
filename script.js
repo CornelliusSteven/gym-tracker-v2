@@ -14,7 +14,6 @@ const state = {
   currentView: "dashboard",
   workoutDraft: null,
   liftBuilder: null,
-  editingSessionId: null,
   loading: true,
   busy: false,
   setupError: "",
@@ -46,7 +45,6 @@ async function init() {
     state.currentView = "dashboard";
     state.workoutDraft = null;
     state.liftBuilder = null;
-    state.editingSessionId = null;
     if (state.authUser) {
       await hydrateUserData();
     } else {
@@ -661,7 +659,6 @@ function renderWorkout() {
       <h2>Submitted Workouts</h2>
       ${renderSubmittedSessions()}
     </div>
-    ${renderEditSessionPanel()}
   `;
 }
 
@@ -769,41 +766,11 @@ function renderSubmittedSessions() {
           <strong>${formatDate(session.date)}</strong>
           <span>${session.muscleGroupsSnapshot.join(", ")}</span>
           <span>${session.lifts.length} lifts</span>
-          <button data-edit-session="${session.id}">Edit Workout</button>
+          <button class="danger" data-delete-session="${session.id}">Delete Workout</button>
         </div>
       `
     )
     .join("");
-}
-
-function renderEditSessionPanel() {
-  if (!state.editingSessionId) return "";
-  const session = state.sessions.find((row) => row.id === state.editingSessionId);
-  if (!session) return "";
-
-  return `
-    <form id="edit-session-form" class="panel">
-      <h2>Edit Submitted Workout</h2>
-      <p><strong>Date:</strong> ${formatDate(session.date)}</p>
-      <p>Muscle Groups</p>
-      <div class="muscle-card-grid">
-        ${getAllMuscles()
-          .map(
-            (name, index) => `
-              <label class="muscle-card" for="edit_muscle_${index}">
-                <input id="edit_muscle_${index}" type="checkbox" name="muscles" value="${escapeHtml(name)}" ${session.muscleGroupsSnapshot.includes(name) ? "checked" : ""} />
-                <span class="muscle-card-body">${escapeHtml(name)}</span>
-              </label>
-            `
-          )
-          .join("")}
-      </div>
-      <div class="inline-actions">
-        <button type="submit">${state.busy ? "Saving..." : "Save Edit"}</button>
-        <button type="button" id="cancel-edit-session" class="ghost">Cancel</button>
-      </div>
-    </form>
-  `;
 }
 
 function bindEvents() {
@@ -1061,45 +1028,23 @@ function bindEvents() {
     });
   });
 
-  document.querySelectorAll("[data-edit-session]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.editingSessionId = button.dataset.editSession;
-      render();
-    });
-  });
-
-  const cancelEditSession = document.getElementById("cancel-edit-session");
-  if (cancelEditSession) {
-    cancelEditSession.addEventListener("click", () => {
-      state.editingSessionId = null;
-      render();
-    });
-  }
-
-  const editSessionForm = document.getElementById("edit-session-form");
-  if (editSessionForm) {
-    editSessionForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const selected = [...event.target.querySelectorAll('input[name="muscles"]:checked')].map((input) => input.value);
-      if (!selected.length) {
-        alert("Select at least one muscle group.");
-        return;
-      }
-
+  document.querySelectorAll("[data-delete-session]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const confirmed = confirm("Delete this workout? XP and streak stats will update automatically.");
+      if (!confirmed) return;
       await runBusy(async () => {
         const { error } = await state.supabase
           .from("workout_sessions")
-          .update({ muscle_groups: selected, updated_at: new Date().toISOString() })
-          .eq("id", state.editingSessionId)
+          .delete()
+          .eq("id", button.dataset.deleteSession)
           .eq("user_id", state.authUser.id);
 
         if (error) throw error;
         await loadSessions();
-        state.editingSessionId = null;
-        alert("Muscle groups updated.");
+        alert("Workout deleted.");
       });
     });
-  }
+  });
 }
 
 async function runBusy(task) {
