@@ -14,6 +14,7 @@ const state = {
   currentView: "dashboard",
   workoutDraft: null,
   liftBuilder: null,
+  selectedCalendarDate: null,
   loading: true,
   busy: false,
   setupError: "",
@@ -45,6 +46,7 @@ async function init() {
     state.currentView = "dashboard";
     state.workoutDraft = null;
     state.liftBuilder = null;
+    state.selectedCalendarDate = null;
     if (state.authUser) {
       await hydrateUserData();
     } else {
@@ -413,6 +415,7 @@ function renderAuthed() {
           <h1>Gym Tracker</h1>
           <p>${escapeHtml(displayName)} (${escapeHtml(state.authUser.email)})</p>
           ${renderThemePicker()}
+          <button id="go-settings" class="ghost settings-button">Settings</button>
         </div>
         <button id="logout-btn" class="ghost">${state.busy ? "Working..." : "Logout"}</button>
       </header>
@@ -434,6 +437,7 @@ function renderView(analytics) {
   if (state.currentView === "dashboard") return renderDashboard(analytics);
   if (state.currentView === "workout") return renderWorkout();
   if (state.currentView === "streak") return renderStreak(analytics);
+  if (state.currentView === "settings") return renderSettings();
   return renderMuscles();
 }
 
@@ -453,6 +457,9 @@ function renderDashboard(analytics) {
       ${metric("Gym Days This Week", analytics.weekGymDays)}
       ${metric("Gym Days This Month", analytics.monthGymDays)}
     </div>
+    <div class="dashboard-cta-row">
+      <button id="go-workout" class="cta-add-workout">+ Add Workout</button>
+    </div>
     <div class="panel">
       <h2>Streak Game</h2>
       <div class="game-grid">
@@ -463,15 +470,9 @@ function renderDashboard(analytics) {
       <div class="xp-track"><div class="xp-fill" style="width:${analytics.xpIntoLevel}%"></div></div>
       <p>Rule: +20 XP per gym session. Weekly streak counts active weeks from Monday to Sunday.</p>
     </div>
-    <div class="dashboard-row">
-      <div class="panel">
-        <h2>Add Workout Session</h2>
-        <button id="go-workout" class="cta-add-workout">+ Add Workout</button>
-      </div>
-      <div class="panel">
-        <h2>Recent Sessions</h2>
-        ${renderSessions(recentWorkouts)}
-      </div>
+    <div class="panel">
+      <h2>Recent Sessions</h2>
+      ${renderSessions(recentWorkouts)}
     </div>
     <div class="panel">
       <h2>Monthly Gym Calendar</h2>
@@ -484,13 +485,6 @@ function renderDashboard(analytics) {
         <button id="copy-share-summary">Copy Summary</button>
         <button id="download-share-card" class="cta-add-workout">Download Card</button>
       </div>
-    </div>
-    <div class="panel">
-      <h2>Profile</h2>
-      <form id="profile-form">
-        <label>Name<input type="text" name="name" value="${escapeHtml(state.profile?.name || "")}" required /></label>
-        <button type="submit">${state.busy ? "Saving..." : "Save Name"}</button>
-      </form>
     </div>
   `;
 }
@@ -545,14 +539,59 @@ function renderMonthlyCalendar(sessions) {
     <div class="calendar-grid">
       ${Array.from({ length: totalDays }, (_, index) => {
         const day = index + 1;
+        const iso = `${year}-${`${month + 1}`.padStart(2, "0")}-${`${day}`.padStart(2, "0")}`;
         const isGym = gymDates.has(day);
         return `
-          <div class="calendar-day ${isGym ? "gym-day" : "rest-day"}">
+          <button class="calendar-day ${isGym ? "gym-day" : "rest-day"} ${state.selectedCalendarDate === iso ? "selected-day" : ""}" data-calendar-date="${iso}">
             <strong>${day}</strong>
             <span>${isGym ? "Gym" : "Rest"}</span>
-          </div>
+          </button>
         `;
       }).join("")}
+    </div>
+    ${renderCalendarDayDetails(sessions)}
+  `;
+}
+
+function renderCalendarDayDetails(sessions) {
+  if (!state.selectedCalendarDate) return "";
+
+  const daySessions = sessions.filter((session) => session.date === state.selectedCalendarDate);
+  if (!daySessions.length) {
+    return `
+      <div class="calendar-detail">
+        <h3>${formatDate(state.selectedCalendarDate)}</h3>
+        <p>Rest day. No workout submitted.</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="calendar-detail">
+      <h3>${formatDate(state.selectedCalendarDate)}</h3>
+      ${daySessions
+        .map(
+          (session, sessionIndex) => `
+            <div class="day-session-detail">
+              <strong>Workout ${sessionIndex + 1}</strong>
+              <span>Muscle groups: ${session.muscleGroupsSnapshot.map(escapeHtml).join(", ")}</span>
+              ${session.lifts
+                .map(
+                  (lift) => `
+                    <div class="lift-detail">
+                      <strong>${escapeHtml(lift.name)} (${escapeHtml(lift.unit)})</strong>
+                      <span>${lift.sets.length} sets</span>
+                      <span>${lift.sets
+                        .map((set) => `Set ${set.setNumber}: ${set.reps} reps, ${set.weight} ${escapeHtml(lift.unit)}`)
+                        .join(" | ")}</span>
+                    </div>
+                  `
+                )
+                .join("")}
+            </div>
+          `
+        )
+        .join("")}
     </div>
   `;
 }
@@ -758,6 +797,18 @@ function renderMuscles() {
   `;
 }
 
+function renderSettings() {
+  return `
+    <div class="panel">
+      <h2>Settings</h2>
+      <form id="profile-form">
+        <label>Name<input type="text" name="name" value="${escapeHtml(state.profile?.name || "")}" required /></label>
+        <button type="submit">${state.busy ? "Saving..." : "Save Name"}</button>
+      </form>
+    </div>
+  `;
+}
+
 function renderSubmittedSessions() {
   if (!state.sessions.length) return "<p>No submitted workouts yet.</p>";
   return state.sessions
@@ -829,6 +880,7 @@ function bindEvents() {
   if (logoutButton) {
     logoutButton.addEventListener("click", async () => {
       await runBusy(async () => {
+        state.selectedCalendarDate = null;
         const { error } = await state.supabase.auth.signOut();
         if (error) throw error;
       });
@@ -849,6 +901,21 @@ function bindEvents() {
       render();
     });
   }
+
+  const goSettings = document.getElementById("go-settings");
+  if (goSettings) {
+    goSettings.addEventListener("click", () => {
+      state.currentView = "settings";
+      render();
+    });
+  }
+
+  document.querySelectorAll("[data-calendar-date]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedCalendarDate = button.dataset.calendarDate;
+      render();
+    });
+  });
 
   const backDashboard = document.getElementById("back-dashboard");
   if (backDashboard) {
