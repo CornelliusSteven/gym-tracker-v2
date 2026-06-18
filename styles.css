@@ -445,7 +445,7 @@ select[multiple] {
   color: var(--active-ink);
   font-size: 1.35rem;
   font-weight: 800;
-  padding: 1.25rem 2rem;
+  padding: 1.25rem 1rem;
 }
 
 .focus-trained {
