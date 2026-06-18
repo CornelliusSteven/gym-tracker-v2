@@ -485,7 +485,7 @@ function renderDashboard(analytics) {
       ${renderShareCard(sharePayload)}
       <div class="inline-actions">
         <button id="copy-share-summary">Copy Summary</button>
-        <button id="download-share-card" class="cta-add-workout">Download Card</button>
+        <button id="download-share-card">Download Card</button>
       </div>
     </div>
   `;

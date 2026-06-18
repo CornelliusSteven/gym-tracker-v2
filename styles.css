@@ -446,6 +446,8 @@ select[multiple] {
   font-size: 1.35rem;
   font-weight: 800;
   padding: 1.25rem 1rem;
+  width: fit-content;
+  min-width: 180px;
 }
 
 .focus-trained {
