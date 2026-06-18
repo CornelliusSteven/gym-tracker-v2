@@ -406,8 +406,14 @@ select[multiple] {
   gap: 0.5rem;
 }
 
-.settings-button {
+.header-actions {
+  display: grid;
+  justify-items: start;
+  gap: 0.55rem;
   margin-top: 0.65rem;
+}
+
+.settings-button {
   width: fit-content;
 }
 

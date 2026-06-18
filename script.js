@@ -414,8 +414,10 @@ function renderAuthed() {
         <div>
           <h1>Gym Tracker</h1>
           <p>${escapeHtml(displayName)} (${escapeHtml(state.authUser.email)})</p>
-          ${renderThemePicker()}
-          <button id="go-settings" class="ghost settings-button">Settings</button>
+          <div class="header-actions">
+            ${renderThemePicker()}
+            <button id="go-settings" class="ghost settings-button">Settings</button>
+          </div>
         </div>
         <button id="logout-btn" class="ghost">${state.busy ? "Working..." : "Logout"}</button>
       </header>
