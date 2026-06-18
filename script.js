@@ -442,6 +442,8 @@ function metric(label, value) {
 }
 
 function renderDashboard(analytics) {
+  const recentWorkoutDate = state.sessions[0]?.date;
+  const recentWorkouts = recentWorkoutDate ? state.sessions.filter((session) => session.date === recentWorkoutDate) : [];
   const top = topPair(analytics.weekMuscles);
   const sharePayload = getSharePayload(analytics, top);
   return `
@@ -463,13 +465,12 @@ function renderDashboard(analytics) {
     </div>
     <div class="dashboard-row">
       <div class="panel">
-        <h2>Most Trained This Week</h2>
-        <p>${top ? `${top[0]} (${top[1]} times)` : "No workouts yet"}</p>
+        <h2>Add Workout Session</h2>
         <button id="go-workout" class="cta-add-workout">+ Add Workout</button>
       </div>
       <div class="panel">
         <h2>Recent Sessions</h2>
-        ${renderSessions(state.sessions.slice(0, 6))}
+        ${renderSessions(recentWorkouts)}
       </div>
     </div>
     <div class="panel">
@@ -676,6 +677,7 @@ function renderDraftLifts(lifts) {
 }
 
 function renderStreak(analytics) {
+  const top = topPair(analytics.weekMuscles);
   return `
     <div class="metrics">
       ${metric("Current Streak", `${analytics.currentStreak} gym days`)}
@@ -683,6 +685,7 @@ function renderStreak(analytics) {
       ${metric("Gym Days This Week", analytics.weekGymDays)}
       ${metric("Gym Days This Month", analytics.monthGymDays)}
     </div>
+    <div class="panel"><h2>Most Trained This Week</h2><p>${top ? `${top[0]} (${top[1]} times)` : "No workouts yet"}</p></div>
     <div class="panel"><h2>Weekly Muscle Summary</h2>${renderSummary(analytics.weekMuscles)}</div>
     <div class="panel"><h2>Monthly Muscle Summary</h2>${renderSummary(analytics.monthMuscles)}</div>
     <div class="panel"><h2>Streak Rule</h2><p>Rest days are allowed. Streak ends if you go 7 consecutive days with no workout submitted.</p></div>

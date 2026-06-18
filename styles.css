@@ -272,7 +272,11 @@ select[multiple] {
 
 .calendar-day strong {
   font-family: "Space Grotesk", sans-serif;
-  font-size: 1.05rem;
+  font-size: 0.9rem;
+}
+
+.calendar-day span {
+  font-size: 0.85rem;
 }
 
 .game-grid {
