@@ -188,7 +188,7 @@ button:hover {
   margin-right: auto;
   color: var(--ink);
   font-family: "Space Grotesk", sans-serif;
-  font-size: 1.15rem;
+  font-size: 1.45rem;
   font-weight: 700;
   background: linear-gradient(90deg, var(--ink), var(--accent), var(--ink));
   background-size: 220% 100%;
@@ -560,6 +560,7 @@ select[multiple] {
 
 .cta-add-workout {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background-size: 180% 180%;
   border-color: transparent;
   color: var(--active-ink);
   font-size: 0.95rem;
@@ -567,6 +568,8 @@ select[multiple] {
   padding: 0.65rem 0.9rem;
   width: auto;
   min-width: 0;
+  animation: cta-pulse 2.7s ease-in-out infinite;
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
 }
 
 .focus-trained {
@@ -637,6 +640,24 @@ select[multiple] {
   }
   100% {
     background-position: 0% 50%;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cta-pulse {
+  0% {
+    background-position: 0% 50%;
+    box-shadow: 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+    transform: translateY(0);
+  }
+  50% {
+    background-position: 100% 50%;
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent);
+    transform: translateY(-1px);
+  }
+  100% {
+    background-position: 0% 50%;
+    box-shadow: 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
     transform: translateY(0);
   }
 }

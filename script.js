@@ -1151,44 +1151,117 @@ async function runBusy(task) {
 }
 
 function downloadShareImage(payload) {
+  const theme = getCanvasTheme();
   const canvas = document.createElement("canvas");
   canvas.width = 1200;
   canvas.height = 628;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  ctx.fillStyle = "#1a1d20";
+  ctx.fillStyle = theme.bg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#f3a530";
-  ctx.fillRect(0, 0, canvas.width, 16);
+  const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  gradient.addColorStop(0, theme.accent);
+  gradient.addColorStop(0.5, theme.panel);
+  gradient.addColorStop(1, theme.accent2);
+  ctx.fillStyle = gradient;
+  roundRect(ctx, 54, 48, 1092, 532, 24);
+  ctx.fill();
 
-  ctx.fillStyle = "#f2f3f5";
+  ctx.fillStyle = theme.panel;
+  roundRect(ctx, 78, 72, 1044, 484, 18);
+  ctx.fill();
+
+  ctx.fillStyle = theme.accent;
+  roundRect(ctx, 78, 72, 1044, 14, 18);
+  ctx.fill();
+
+  ctx.fillStyle = theme.ink;
   ctx.font = "700 48px Arial";
-  ctx.fillText("Weekly Gym Update", 60, 90);
+  ctx.fillText("Weekly Gym Update", 118, 140);
   ctx.font = "600 34px Arial";
-  ctx.fillText(payload.name, 60, 140);
+  ctx.fillStyle = theme.muted;
+  ctx.fillText(payload.name, 118, 188);
 
-  const rows = [
-    `Current Streak: ${payload.currentStreak} days`,
-    `Weekly Streak: ${payload.weeklyStreak} weeks`,
-    `Gym Days This Week: ${payload.weekGymDays}`,
-    `Top Muscle: ${payload.topMuscle}`,
-    `Level: ${payload.level}`,
-    `XP: ${payload.xp} (${payload.xpIntoLevel}/100 to next level)`,
+  const stats = [
+    ["Current Streak", `${payload.currentStreak} days`],
+    ["Weekly Streak", `${payload.weeklyStreak} weeks`],
+    ["Gym Days", `${payload.weekGymDays} this week`],
+    ["Top Muscle", payload.topMuscle],
+    ["Level", `${payload.level}`],
+    ["XP", `${payload.xp} total (${payload.xpIntoLevel}/100)`],
   ];
 
-  ctx.font = "500 32px Arial";
-  ctx.fillStyle = "#e8edf1";
-  rows.forEach((row, index) => {
-    ctx.fillText(row, 60, 220 + index * 62);
+  stats.forEach(([label, value], index) => {
+    const col = index % 2;
+    const row = Math.floor(index / 2);
+    const x = 118 + col * 500;
+    const y = 240 + row * 96;
+
+    ctx.fillStyle = theme.card;
+    roundRect(ctx, x, y, 450, 72, 14);
+    ctx.fill();
+    ctx.fillStyle = theme.muted;
+    ctx.font = "600 21px Arial";
+    ctx.fillText(label, x + 24, y + 28);
+    ctx.fillStyle = theme.ink;
+    ctx.font = "700 27px Arial";
+    ctx.fillText(value, x + 24, y + 58);
   });
 
-  ctx.fillStyle = "#a8afb7";
+  ctx.fillStyle = theme.muted;
   ctx.font = "500 24px Arial";
-  ctx.fillText("Generated from Gym Tracker", 60, 588);
+  ctx.fillText("Generated from Gym Tracker", 118, 526);
 
   const link = document.createElement("a");
   link.href = canvas.toDataURL("image/png");
   link.download = "gym-weekly-share-card.png";
   link.click();
+}
+
+function getCanvasTheme() {
+  const themes = {
+    dark: {
+      bg: "#111315",
+      panel: "#1a1d20",
+      card: "#252a2f",
+      ink: "#f2f3f5",
+      muted: "#a8afb7",
+      accent: "#f3a530",
+      accent2: "#f2b650",
+    },
+    pastel: {
+      bg: "#ffeef4",
+      panel: "#fff7fb",
+      card: "#fbe5ee",
+      ink: "#5a2c42",
+      muted: "#8e5f78",
+      accent: "#ec7da8",
+      accent2: "#f09dbf",
+    },
+    royal: {
+      bg: "#1f1730",
+      panel: "#2d203b",
+      card: "#3c2b4d",
+      ink: "#f3e8d6",
+      muted: "#cdbda6",
+      accent: "#a35ce0",
+      accent2: "#b98255",
+    },
+  };
+  return themes[state.theme] || themes.dark;
+}
+
+function roundRect(ctx, x, y, width, height, radius) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
 }
