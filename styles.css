@@ -572,6 +572,18 @@ select[multiple] {
   box-shadow: 0 0 0 rgba(0, 0, 0, 0);
 }
 
+body[data-theme="dark"] .cta-add-workout {
+  background-image: linear-gradient(135deg, #f3a530, #f2b650, #f08b2f);
+}
+
+body[data-theme="pastel"] .cta-add-workout {
+  background-image: linear-gradient(135deg, #ec7da8, #ffd6e5, #f09dbf);
+}
+
+body[data-theme="royal"] .cta-add-workout {
+  background-image: linear-gradient(135deg, #a35ce0, #b98255, #6f3aa5);
+}
+
 .focus-trained {
   color: var(--accent-2);
   font-weight: 700;

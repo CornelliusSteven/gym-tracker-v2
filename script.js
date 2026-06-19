@@ -1165,20 +1165,20 @@ function downloadShareImage(payload) {
   gradient.addColorStop(0.5, theme.panel);
   gradient.addColorStop(1, theme.accent2);
   ctx.fillStyle = gradient;
-  roundRect(ctx, 54, 48, 1092, 532, 24);
+  roundRect(ctx, 72, 60, 1056, 508, 20);
   ctx.fill();
 
   ctx.fillStyle = theme.panel;
-  roundRect(ctx, 78, 72, 1044, 484, 18);
+  roundRect(ctx, 84, 72, 1032, 484, 16);
   ctx.fill();
 
   ctx.fillStyle = theme.accent;
-  roundRect(ctx, 78, 72, 1044, 14, 18);
+  roundRect(ctx, 84, 72, 1032, 7, 16);
   ctx.fill();
 
   ctx.fillStyle = theme.ink;
   ctx.font = "700 48px Arial";
-  ctx.fillText("Weekly Gym Update", 118, 140);
+  ctx.fillText("The Gym Grind", 118, 140);
   ctx.font = "600 34px Arial";
   ctx.fillStyle = theme.muted;
   ctx.fillText(payload.name, 118, 188);
@@ -1210,7 +1210,7 @@ function downloadShareImage(payload) {
   });
 
   ctx.fillStyle = theme.muted;
-  ctx.font = "500 24px Arial";
+  ctx.font = "500 19px Arial";
   ctx.fillText("Generated from Gym Tracker", 118, 526);
 
   const link = document.createElement("a");
