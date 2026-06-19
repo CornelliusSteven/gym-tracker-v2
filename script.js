@@ -423,7 +423,7 @@ function renderAuthed() {
       </header>
       <nav class="tabs">
         ${tab("dashboard", "Dashboard")}
-        ${tab("streak", "Streak")}
+        ${tab("streak", "Track")}
         ${tab("muscles", "Muscle Groups")}
       </nav>
       <section class="content">${renderView(analytics)}</section>
@@ -447,6 +447,10 @@ function metric(label, value) {
   return `<article class="metric"><h3>${label}</h3><p>${value}</p></article>`;
 }
 
+function streakMetric(label, value) {
+  return `<article class="metric streak-metric"><span class="fire-icon">🔥</span><h3>${label}</h3><p>${value}</p></article>`;
+}
+
 function renderDashboard(analytics) {
   const recentWorkoutDate = state.sessions[0]?.date;
   const recentWorkouts = recentWorkoutDate ? state.sessions.filter((session) => session.date === recentWorkoutDate) : [];
@@ -454,8 +458,8 @@ function renderDashboard(analytics) {
   const sharePayload = getSharePayload(analytics, top);
   return `
     <div class="metrics">
-      ${metric("Current Streak", `${analytics.currentStreak} gym days`)}
-      ${metric("Longest Streak", `${analytics.longestStreak} gym days`)}
+      ${streakMetric("Current Streak", `${analytics.currentStreak} gym days`)}
+      ${streakMetric("Longest Streak", `${analytics.longestStreak} gym days`)}
       ${metric("Gym Days This Week", analytics.weekGymDays)}
       ${metric("Gym Days This Month", analytics.monthGymDays)}
     </div>
@@ -463,14 +467,20 @@ function renderDashboard(analytics) {
       <button id="go-workout" class="cta-add-workout">+ Add Workout</button>
     </div>
     <div class="panel">
-      <h2>Streak Game</h2>
+      <div class="panel-heading-row">
+        <h2>Streak Game</h2>
+        <button class="rule-button" type="button" aria-label="Show streak rule">?</button>
+        <div class="rule-popover">
+          Rest days are allowed. Gym-day streak ends if you go 7 consecutive days with no workout submitted. Weekly streak counts active weeks from Monday to Sunday.
+        </div>
+      </div>
       <div class="game-grid">
         <div class="game-stat"><strong>Level</strong><span>${analytics.level}</span></div>
         <div class="game-stat"><strong>Weekly Gym Streak</strong><span>${analytics.weeklyStreak}</span></div>
       </div>
       <p>${analytics.xp} total XP - ${analytics.xpIntoLevel}/100 XP to next level</p>
       <div class="xp-track"><div class="xp-fill" style="width:${analytics.xpIntoLevel}%"></div></div>
-      <p>Rule: +20 XP per gym session. Weekly streak counts active weeks from Monday to Sunday.</p>
+      <p>Rule: +20 XP per gym session.</p>
     </div>
     <div class="panel">
       <h2>Recent Sessions</h2>
@@ -720,16 +730,10 @@ function renderDraftLifts(lifts) {
 function renderStreak(analytics) {
   const top = topPair(analytics.weekMuscles);
   return `
-    <div class="metrics">
-      ${metric("Current Streak", `${analytics.currentStreak} gym days`)}
-      ${metric("Longest Streak", `${analytics.longestStreak} gym days`)}
-      ${metric("Gym Days This Week", analytics.weekGymDays)}
-      ${metric("Gym Days This Month", analytics.monthGymDays)}
-    </div>
+    <div class="panel"><h2>Track Summary</h2><p>Weekly and monthly training balance based on your submitted workouts.</p></div>
     <div class="panel"><h2>Most Trained This Week</h2><p>${top ? `${top[0]} (${top[1]} times)` : "No workouts yet"}</p></div>
     <div class="panel"><h2>Weekly Muscle Summary</h2>${renderSummary(analytics.weekMuscles)}</div>
     <div class="panel"><h2>Monthly Muscle Summary</h2>${renderSummary(analytics.monthMuscles)}</div>
-    <div class="panel"><h2>Streak Rule</h2><p>Rest days are allowed. Streak ends if you go 7 consecutive days with no workout submitted.</p></div>
   `;
 }
 

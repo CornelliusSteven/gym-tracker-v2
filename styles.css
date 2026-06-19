@@ -155,8 +155,9 @@ button:hover {
 }
 
 .danger {
-  border-color: var(--danger);
-  color: var(--danger);
+  border-color: color-mix(in srgb, var(--ink) 34%, transparent);
+  color: color-mix(in srgb, var(--ink) 82%, transparent);
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
 }
 
 .content {
@@ -204,6 +205,7 @@ button:hover {
   background: linear-gradient(160deg, #1f2328 35%, #2a2f36 100%);
   display: grid;
   gap: 0.4rem;
+  position: relative;
 }
 
 .metric p {
@@ -214,6 +216,18 @@ button:hover {
 
 body[data-theme="pastel"] .metric h3 {
   color: #fffdfd;
+}
+
+.streak-metric {
+  padding-right: 2.35rem;
+}
+
+.fire-icon {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.75rem;
+  font-size: 1.35rem;
+  line-height: 1;
 }
 
 label {
@@ -332,6 +346,46 @@ select[multiple] {
 .game-stat span {
   font-size: 1.2rem;
   font-weight: 800;
+}
+
+.panel-heading-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.rule-button {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.rule-popover {
+  position: absolute;
+  top: 2.35rem;
+  right: 0;
+  z-index: 3;
+  width: min(320px, 80vw);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.75rem;
+  color: var(--ink);
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.rule-button:hover + .rule-popover,
+.rule-button:focus + .rule-popover {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 .xp-track {
