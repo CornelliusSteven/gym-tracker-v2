@@ -573,15 +573,15 @@ select[multiple] {
 }
 
 body[data-theme="dark"] .cta-add-workout {
-  background-image: linear-gradient(135deg, #f3a530, #f2b650, #f08b2f);
+  background-image: linear-gradient(135deg, #7b4dff, #d45aa8, #f3a530);
 }
 
 body[data-theme="pastel"] .cta-add-workout {
-  background-image: linear-gradient(135deg, #ec7da8, #ffd6e5, #f09dbf);
+  background-image: linear-gradient(135deg, #ff8fbd, #ffd6e5, #f25fa6);
 }
 
 body[data-theme="royal"] .cta-add-workout {
-  background-image: linear-gradient(135deg, #a35ce0, #b98255, #6f3aa5);
+  background-image: linear-gradient(135deg, #7b35c8, #b45bb8, #7b4d35);
 }
 
 .focus-trained {
