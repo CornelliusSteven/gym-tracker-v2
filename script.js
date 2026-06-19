@@ -1160,21 +1160,14 @@ function downloadShareImage(payload) {
 
   ctx.fillStyle = theme.bg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-  gradient.addColorStop(0, theme.accent);
-  gradient.addColorStop(0.5, theme.panel);
-  gradient.addColorStop(1, theme.accent2);
-  ctx.fillStyle = gradient;
-  roundRect(ctx, 78, 66, 1044, 496, 18);
-  ctx.fill();
 
   ctx.fillStyle = theme.panel;
-  roundRect(ctx, 81, 69, 1038, 490, 16);
+  roundRect(ctx, 78, 66, 1044, 496, 18);
   ctx.fill();
-
-  ctx.fillStyle = theme.accent;
-  roundRect(ctx, 81, 69, 1038, 4, 16);
-  ctx.fill();
+  ctx.strokeStyle = theme.accent;
+  ctx.lineWidth = 3;
+  roundRect(ctx, 78, 66, 1044, 496, 18);
+  ctx.stroke();
 
   ctx.fillStyle = theme.ink;
   ctx.font = "700 48px Arial";

@@ -568,7 +568,7 @@ select[multiple] {
   padding: 0.65rem 0.9rem;
   width: auto;
   min-width: 0;
-  animation: cta-pulse 3.6s ease-in-out infinite;
+  animation: cta-pulse 5s ease-in-out infinite;
   box-shadow: 0 0 0 rgba(0, 0, 0, 0);
 }
 
@@ -664,8 +664,8 @@ body[data-theme="royal"] .cta-add-workout {
   }
   50% {
     background-position: 100% 50%;
-    box-shadow: 0 5px 16px color-mix(in srgb, var(--accent) 22%, transparent);
-    transform: translateY(-1px);
+    box-shadow: 0 3px 10px color-mix(in srgb, var(--accent) 14%, transparent);
+    transform: translateY(-0.5px);
   }
   100% {
     background-position: 0% 50%;
