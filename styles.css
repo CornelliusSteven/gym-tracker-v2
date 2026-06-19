@@ -433,6 +433,19 @@ select[multiple] {
   transition: opacity 0.16s ease, transform 0.16s ease;
 }
 
+.rule-popover p {
+  position: relative;
+  padding-left: 1rem;
+}
+
+.rule-popover p::before {
+  position: absolute;
+  left: 0;
+  content: "•";
+  color: var(--accent);
+  font-weight: 800;
+}
+
 .rule-button:hover + .rule-popover,
 .rule-button:focus + .rule-popover {
   opacity: 1;

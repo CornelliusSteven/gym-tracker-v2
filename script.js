@@ -484,7 +484,9 @@ function renderDashboard(analytics) {
         <h2>Streak Game</h2>
         <button class="rule-button" type="button" aria-label="Show streak rule">?</button>
         <div class="rule-popover">
-          Rest days are allowed. Gym-day streak ends if you go 7 consecutive days with no workout submitted. Weekly streak counts active weeks from Monday to Sunday.
+          <p>Rest days are allowed.</p>
+          <p>Gym-day streak ends after 7 days with no workout.</p>
+          <p>Weekly streak counts active weeks from Monday to Sunday.</p>
         </div>
       </div>
       <div class="game-grid">
