@@ -1165,15 +1165,15 @@ function downloadShareImage(payload) {
   gradient.addColorStop(0.5, theme.panel);
   gradient.addColorStop(1, theme.accent2);
   ctx.fillStyle = gradient;
-  roundRect(ctx, 72, 60, 1056, 508, 20);
+  roundRect(ctx, 78, 66, 1044, 496, 18);
   ctx.fill();
 
   ctx.fillStyle = theme.panel;
-  roundRect(ctx, 84, 72, 1032, 484, 16);
+  roundRect(ctx, 81, 69, 1038, 490, 16);
   ctx.fill();
 
   ctx.fillStyle = theme.accent;
-  roundRect(ctx, 84, 72, 1032, 7, 16);
+  roundRect(ctx, 81, 69, 1038, 4, 16);
   ctx.fill();
 
   ctx.fillStyle = theme.ink;
