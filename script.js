@@ -447,8 +447,19 @@ function metric(label, value) {
   return `<article class="metric"><h3>${label}</h3><p>${value}</p></article>`;
 }
 
-function streakMetric(label, value) {
-  return `<article class="metric streak-metric"><span class="fire-icon">🔥</span><h3>${label}</h3><p>${value}</p></article>`;
+function fireIcon(isLit) {
+  return `
+    <span class="fire-icon ${isLit ? "fire-lit" : "fire-dim"}" aria-hidden="true">
+      <svg viewBox="0 0 24 24" role="img">
+        <path d="M12.2 22c-4.4 0-7.5-2.9-7.5-7 0-2.8 1.5-5 3.4-6.8.7-.7 1.6-1.7 1.7-3.3 0-.6.7-.9 1.2-.5 1.9 1.4 3 3.2 3.2 5.5.8-.7 1.3-1.7 1.5-2.8.1-.7.9-1 1.4-.5 1.6 1.5 2.3 3.4 2.3 5.7 0 5.7-3.9 9.7-7.2 9.7Z" />
+        <path class="fire-core" d="M12 20c-2.1 0-3.6-1.4-3.6-3.3 0-1.5.9-2.8 2.1-3.8.5-.4.9-.9 1-1.7 0-.4.5-.6.8-.3 1.3 1 2.1 2.4 2.1 4 0 3-1.4 5.1-2.4 5.1Z" />
+      </svg>
+    </span>
+  `;
+}
+
+function streakMetric(label, value, isLit) {
+  return `<article class="metric streak-metric">${fireIcon(isLit)}<h3>${label}</h3><p>${value}</p></article>`;
 }
 
 function renderDashboard(analytics) {
@@ -456,14 +467,16 @@ function renderDashboard(analytics) {
   const recentWorkouts = recentWorkoutDate ? state.sessions.filter((session) => session.date === recentWorkoutDate) : [];
   const top = topPair(analytics.weekMuscles);
   const sharePayload = getSharePayload(analytics, top);
+  const displayName = state.profile?.name?.trim() || state.authUser.email;
   return `
     <div class="metrics">
-      ${streakMetric("Current Streak", `${analytics.currentStreak} gym days`)}
-      ${streakMetric("Longest Streak", `${analytics.longestStreak} gym days`)}
+      ${streakMetric("Current Streak", `${analytics.currentStreak} gym days`, analytics.currentStreak > 0)}
+      ${streakMetric("Longest Streak", `${analytics.longestStreak} gym days`, analytics.longestStreak > 0)}
       ${metric("Gym Days This Week", analytics.weekGymDays)}
       ${metric("Gym Days This Month", analytics.monthGymDays)}
     </div>
     <div class="dashboard-cta-row">
+      <p class="grind-welcome">Welcome to the Grind, ${escapeHtml(displayName)}</p>
       <button id="go-workout" class="cta-add-workout">+ Add Workout</button>
     </div>
     <div class="panel">
@@ -476,7 +489,7 @@ function renderDashboard(analytics) {
       </div>
       <div class="game-grid">
         <div class="game-stat"><strong>Level</strong><span>${analytics.level}</span></div>
-        <div class="game-stat"><strong>Weekly Gym Streak</strong><span>${analytics.weeklyStreak}</span></div>
+        <div class="game-stat streak-game-stat">${fireIcon(analytics.weeklyStreak > 0)}<strong>Weekly Gym Streak</strong><span>${analytics.weeklyStreak}</span></div>
       </div>
       <p>${analytics.xp} total XP - ${analytics.xpIntoLevel}/100 XP to next level</p>
       <div class="xp-track"><div class="xp-fill" style="width:${analytics.xpIntoLevel}%"></div></div>
