@@ -438,6 +438,7 @@ function tab(id, label) {
 function renderView(analytics) {
   if (state.currentView === "dashboard") return renderDashboard(analytics);
   if (state.currentView === "workout") return renderWorkout();
+  if (state.currentView === "calendarDay") return renderCalendarDayPage();
   if (state.currentView === "streak") return renderStreak(analytics);
   if (state.currentView === "settings") return renderSettings();
   return renderMuscles();
@@ -576,41 +577,81 @@ function renderMonthlyCalendar(sessions) {
         `;
       }).join("")}
     </div>
-    ${renderCalendarDayDetails(sessions)}
   `;
 }
 
-function renderCalendarDayDetails(sessions) {
-  if (!state.selectedCalendarDate) return "";
+function renderCalendarDayPage() {
+  const selectedDate = state.selectedCalendarDate || todayIso();
+  const daySessions = state.sessions.filter((session) => session.date === selectedDate);
+  const muscleGroups = [...new Set(daySessions.flatMap((session) => session.muscleGroupsSnapshot || []))];
+  const lifts = daySessions.flatMap((session) => session.lifts || []);
+  const totalSets = lifts.reduce((sum, lift) => sum + (lift.sets?.length || 0), 0);
+  const totalReps = lifts.reduce(
+    (sum, lift) => sum + (lift.sets || []).reduce((setSum, set) => setSum + Number(set.reps || 0), 0),
+    0
+  );
 
-  const daySessions = sessions.filter((session) => session.date === state.selectedCalendarDate);
   if (!daySessions.length) {
     return `
-      <div class="calendar-detail">
-        <h3>${formatDate(state.selectedCalendarDate)}</h3>
-        <p>Rest day. No workout submitted.</p>
+      <div class="panel calendar-page">
+        <div class="page-top-row">
+          <button id="back-dashboard" class="ghost">Back</button>
+          <span class="calendar-page-label">Monthly Gym Calendar detail</span>
+        </div>
+        <div class="calendar-detail hero-detail">
+          <h2>${formatDate(selectedDate)}</h2>
+          <p>Rest day. No workout submitted on this date.</p>
+        </div>
       </div>
     `;
   }
 
   return `
-    <div class="calendar-detail">
-      <h3>${formatDate(state.selectedCalendarDate)}</h3>
+    <div class="panel calendar-page">
+      <div class="page-top-row">
+        <button id="back-dashboard" class="ghost">Back</button>
+        <span class="calendar-page-label">Monthly Gym Calendar detail</span>
+      </div>
+      <div class="calendar-detail hero-detail">
+        <h2>${formatDate(selectedDate)}</h2>
+        <p>Complete workout detail from your saved gym session.</p>
+        <div class="detail-summary-grid">
+          <div><strong>Status</strong><span>Gym day</span></div>
+          <div><strong>Sessions</strong><span>${daySessions.length}</span></div>
+          <div><strong>Muscle Groups</strong><span>${muscleGroups.map(escapeHtml).join(", ")}</span></div>
+          <div><strong>Total Lifts</strong><span>${lifts.length}</span></div>
+          <div><strong>Total Sets</strong><span>${totalSets}</span></div>
+          <div><strong>Total Reps</strong><span>${totalReps}</span></div>
+        </div>
+      </div>
       ${daySessions
         .map(
           (session, sessionIndex) => `
             <div class="day-session-detail">
-              <strong>Workout ${sessionIndex + 1}</strong>
+              <div class="session-detail-heading">
+                <strong>Workout Session ${sessionIndex + 1}</strong>
+                <span>${session.createdAt ? new Date(session.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Saved session"}</span>
+              </div>
               <span>Muscle groups: ${session.muscleGroupsSnapshot.map(escapeHtml).join(", ")}</span>
               ${session.lifts
                 .map(
-                  (lift) => `
+                  (lift, liftIndex) => `
                     <div class="lift-detail">
-                      <strong>${escapeHtml(lift.name)} (${escapeHtml(lift.unit)})</strong>
+                      <strong>Lift ${liftIndex + 1}: ${escapeHtml(lift.name)} (${escapeHtml(lift.unit)})</strong>
                       <span>${lift.sets.length} sets</span>
-                      <span>${lift.sets
-                        .map((set) => `Set ${set.setNumber}: ${set.reps} reps, ${set.weight} ${escapeHtml(lift.unit)}`)
-                        .join(" | ")}</span>
+                      <div class="set-detail-grid">
+                        ${lift.sets
+                          .map(
+                            (set) => `
+                              <div>
+                                <strong>Set ${set.setNumber}</strong>
+                                <span>${set.reps} reps</span>
+                                <span>${set.weight} ${escapeHtml(lift.unit)}</span>
+                              </div>
+                            `
+                          )
+                          .join("")}
+                      </div>
                     </div>
                   `
                 )
@@ -934,6 +975,7 @@ function bindEvents() {
   document.querySelectorAll("[data-calendar-date]").forEach((button) => {
     button.addEventListener("click", () => {
       state.selectedCalendarDate = button.dataset.calendarDate;
+      state.currentView = "calendarDay";
       render();
     });
   });

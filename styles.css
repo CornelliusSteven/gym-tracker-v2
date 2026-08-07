@@ -375,6 +375,62 @@ select[multiple] {
   padding-top: 0;
 }
 
+.calendar-page {
+  gap: 1rem;
+}
+
+.page-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.calendar-page-label {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.hero-detail h2 {
+  margin: 0;
+}
+
+.detail-summary-grid,
+.set-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.6rem;
+}
+
+.detail-summary-grid div,
+.set-detail-grid div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.25rem;
+  background: color-mix(in srgb, var(--panel) 82%, var(--accent) 18%);
+}
+
+.detail-summary-grid span,
+.set-detail-grid span {
+  color: var(--muted);
+}
+
+.session-detail-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.session-detail-heading span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .game-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
