@@ -15,6 +15,7 @@ const state = {
   workoutDraft: null,
   liftBuilder: null,
   selectedCalendarDate: null,
+  trackRange: "allTime",
   loading: true,
   busy: false,
   setupError: "",
@@ -407,13 +408,13 @@ function renderAuth() {
 
 function renderAuthed() {
   const analytics = computeAnalytics();
-  const displayName = state.profile?.name?.trim() || state.authUser.email;
+  const displayName = state.profile?.name?.trim() || "Gym Athlete";
   return `
     <main class="shell">
       <header class="topbar">
         <div>
           <h1>Gym Tracker</h1>
-          <p>${escapeHtml(displayName)} (${escapeHtml(state.authUser.email)})</p>
+          <p>${escapeHtml(displayName)}</p>
           <div class="header-actions">
             ${renderThemePicker()}
             <button id="go-settings" class="ghost settings-button">Settings</button>
@@ -468,7 +469,7 @@ function renderDashboard(analytics) {
   const recentWorkouts = recentWorkoutDate ? state.sessions.filter((session) => session.date === recentWorkoutDate) : [];
   const top = topPair(analytics.weekMuscles);
   const sharePayload = getSharePayload(analytics, top);
-  const displayName = state.profile?.name?.trim() || state.authUser.email;
+  const displayName = state.profile?.name?.trim() || "Gym Athlete";
   return `
     <div class="metrics">
       ${streakMetric("Current Streak", `${analytics.currentStreak} gym days`, analytics.currentStreak > 0)}
@@ -518,7 +519,7 @@ function renderDashboard(analytics) {
 }
 
 function getSharePayload(analytics, topMuscle) {
-  const name = state.profile?.name?.trim() || state.authUser.email;
+  const name = state.profile?.name?.trim() || "Gym Athlete";
   return {
     name,
     currentStreak: analytics.currentStreak,
@@ -783,14 +784,80 @@ function renderDraftLifts(lifts) {
     .join("");
 }
 
-function renderStreak(analytics) {
-  const top = topPair(analytics.weekMuscles);
+function renderStreak() {
   return `
-    <div class="panel"><h2>Track Summary</h2><p>Weekly and monthly training balance based on your submitted workouts.</p></div>
-    <div class="panel"><h2>Most Trained This Week</h2><p>${top ? `${top[0]} (${top[1]} times)` : "No workouts yet"}</p></div>
-    <div class="panel"><h2>Weekly Muscle Summary</h2>${renderSummary(analytics.weekMuscles)}</div>
-    <div class="panel"><h2>Monthly Muscle Summary</h2>${renderSummary(analytics.monthMuscles)}</div>
+    <div class="panel track-panel">
+      <div>
+        <h2>Track</h2>
+        <p>Visual chart of how many different gym days each muscle has been trained.</p>
+      </div>
+      <div class="track-filter-row" aria-label="Track chart time filter">
+        ${trackRangeButton("allTime", "All time")}
+        ${trackRangeButton("thisMonth", "This month")}
+        ${trackRangeButton("last30", "Last 30 days")}
+      </div>
+      ${renderMuscleDayChart(state.trackRange)}
+    </div>
   `;
+}
+
+function trackRangeButton(range, label) {
+  return `<button class="track-filter ${state.trackRange === range ? "active" : ""}" data-track-range="${range}">${label}</button>`;
+}
+
+function renderMuscleDayChart(range) {
+  const rows = getMuscleDayCounts(range);
+  if (!rows.length) return `<p>No muscle data for this period yet.</p>`;
+
+  const maxCount = Math.max(...rows.map((row) => row.count));
+  return `
+    <div class="track-chart">
+      ${rows
+        .map((row) => {
+          const width = Math.max((row.count / maxCount) * 100, 8);
+          return `
+            <div class="chart-row">
+              <div class="chart-label">
+                <strong>${escapeHtml(row.name)}</strong>
+                <span>${row.count} day${row.count > 1 ? "s" : ""}</span>
+              </div>
+              <div class="chart-track" aria-label="${escapeHtml(row.name)} trained ${row.count} day${row.count > 1 ? "s" : ""}">
+                <div class="chart-bar" style="width:${width}%"></div>
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function getMuscleDayCounts(range) {
+  const today = parseIso(todayIso());
+  const month = today.getMonth();
+  const year = today.getFullYear();
+  const last30Start = new Date(today);
+  last30Start.setDate(today.getDate() - 29);
+  const muscleDays = new Map();
+
+  state.sessions.forEach((session) => {
+    const date = parseIso(session.date);
+    const include =
+      range === "allTime" ||
+      (range === "thisMonth" && date.getMonth() === month && date.getFullYear() === year) ||
+      (range === "last30" && date >= last30Start && date <= today);
+
+    if (!include) return;
+
+    [...new Set(session.muscleGroupsSnapshot || [])].forEach((name) => {
+      if (!muscleDays.has(name)) muscleDays.set(name, new Set());
+      muscleDays.get(name).add(session.date);
+    });
+  });
+
+  return [...muscleDays.entries()]
+    .map(([name, dates]) => ({ name, count: dates.size }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
 function renderSummary(mapObj) {
@@ -863,6 +930,10 @@ function renderSettings() {
   return `
     <div class="panel">
       <h2>Settings</h2>
+      <div class="account-email">
+        <strong>Email</strong>
+        <span>${escapeHtml(state.authUser.email)}</span>
+      </div>
       <form id="profile-form">
         <label>Name<input type="text" name="name" value="${escapeHtml(state.profile?.name || "")}" required /></label>
         <button type="submit">${state.busy ? "Saving..." : "Save Name"}</button>
@@ -952,6 +1023,13 @@ function bindEvents() {
   document.querySelectorAll("[data-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       state.currentView = button.dataset.tab;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-track-range]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.trackRange = button.dataset.trackRange;
       render();
     });
   });
