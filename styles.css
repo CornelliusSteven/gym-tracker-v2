@@ -843,7 +843,72 @@ body[data-theme="royal"] .cta-add-workout {
 
 .workout-nav {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
   justify-content: flex-start;
+}
+
+.draft-save-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-left: auto;
+}
+
+.draft-save-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 88%, var(--line) 12%);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.draft-save-status.saving {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line) 52%);
+  color: var(--accent);
+}
+
+.draft-save-status.saved {
+  border-color: color-mix(in srgb, var(--accent-2) 52%, var(--line) 48%);
+  color: var(--accent-2);
+}
+
+.draft-save-status.offline,
+.draft-save-status.device {
+  border-style: dashed;
+}
+
+.draft-save-status.error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.compact-button {
+  width: auto;
+  padding: 0.45rem 0.65rem;
+}
+
+.workout-resume-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--line) 48%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--panel) 90%, var(--accent) 10%), var(--panel));
+}
+
+.resume-eyebrow {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .back-button {
@@ -1036,6 +1101,16 @@ body[data-theme="royal"] .cta-add-workout {
 }
 
 @media (max-width: 560px) {
+  .workout-resume-card {
+    grid-template-columns: 1fr;
+  }
+
+  .draft-save-controls {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+
   .analytics-chart-heading,
   .workout-muscle-heading {
     align-items: flex-start;

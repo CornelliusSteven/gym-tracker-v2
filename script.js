@@ -1,8 +1,15 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
 const THEME_KEY = "gym_tracker_theme_v1";
+const WORKOUT_DRAFT_STORAGE_PREFIX = "gym_tracker_workout_draft_v1";
+const WORKOUT_DRAFT_VERSION = 1;
+const DRAFT_SYNC_DELAY_MS = 900;
 const DEFAULT_PRIMARY = ["Chest", "Back", "Shoulder", "Leg"];
 const DEFAULT_SECONDARY = ["Biceps", "Triceps", "Forearms", "Calves", "Abs"];
+let draftSyncTimer = null;
+let draftSyncInFlight = null;
+let lastServerDraftSavedAt = null;
+let draftLifecycleRegistered = false;
 
 const state = {
   supabase: null,
@@ -19,11 +26,16 @@ const state = {
   loading: true,
   busy: false,
   setupError: "",
+  draftStatus: "idle",
+  draftUpdatedAt: null,
+  draftId: null,
+  draftBackendAvailable: true,
 };
 
 await init();
 
 async function init() {
+  registerDraftLifecycleHandlers();
   const config = window.GYM_TRACKER_SUPABASE_CONFIG || {};
   if (!isSupabaseConfigReady(config)) {
     state.setupError = "Supabase is not configured yet. Add your project URL and anon key in supabase.config.js.";
@@ -43,13 +55,26 @@ async function init() {
   state.authUser = data.session?.user || null;
 
   state.supabase.auth.onAuthStateChange(async (_event, session) => {
-    state.authUser = session?.user || null;
+    const previousUserId = state.authUser?.id || null;
+    const nextUser = session?.user || null;
+    const nextUserId = nextUser?.id || null;
+
+    state.authUser = nextUser;
+    if (previousUserId === nextUserId) return;
+
+    clearTimeout(draftSyncTimer);
     state.currentView = "dashboard";
     state.workoutDraft = null;
     state.liftBuilder = null;
+    state.draftStatus = "idle";
+    state.draftUpdatedAt = null;
+    state.draftId = null;
+    lastServerDraftSavedAt = null;
+    state.draftBackendAvailable = true;
     state.selectedCalendarDate = null;
     if (state.authUser) {
       await hydrateUserData();
+      await restoreWorkoutDraft();
     } else {
       state.profile = null;
       state.sessions = [];
@@ -61,6 +86,7 @@ async function init() {
 
   if (state.authUser) {
     await hydrateUserData();
+    await restoreWorkoutDraft();
   }
 
   state.loading = false;
@@ -168,6 +194,350 @@ async function loadSessions() {
     lifts: row.lifts || [],
     createdAt: row.created_at,
   }));
+}
+
+function createLiftBuilder(overrides = {}) {
+  return {
+    liftName: "",
+    setsCount: 1,
+    unit: "kg",
+    currentSet: 1,
+    sets: [],
+    editingLiftId: null,
+    isConfigured: false,
+    pendingRepsChoice: "1",
+    pendingCustomReps: 21,
+    pendingWeight: "",
+    ...overrides,
+  };
+}
+
+function normalizeLiftBuilder(raw) {
+  const builder = createLiftBuilder(raw && typeof raw === "object" ? raw : {});
+  builder.setsCount = Math.max(1, Number.parseInt(builder.setsCount, 10) || 1);
+  builder.currentSet = Math.min(builder.setsCount, Math.max(1, Number.parseInt(builder.currentSet, 10) || 1));
+  builder.sets = Array.isArray(builder.sets) ? builder.sets : [];
+  builder.unit = builder.unit === "lbs" ? "lbs" : "kg";
+  builder.pendingRepsChoice =
+    builder.pendingRepsChoice === "custom" ||
+    (Number(builder.pendingRepsChoice) >= 1 && Number(builder.pendingRepsChoice) <= 20)
+      ? String(builder.pendingRepsChoice)
+      : "1";
+  builder.pendingCustomReps = Math.max(21, Number.parseInt(builder.pendingCustomReps, 10) || 21);
+  builder.pendingWeight = builder.pendingWeight === "" ? "" : String(builder.pendingWeight ?? "");
+  builder.isConfigured = Boolean(builder.isConfigured);
+  return builder;
+}
+
+function normalizeWorkoutDraft(raw) {
+  if (!raw || typeof raw !== "object" || typeof raw.date !== "string") return null;
+  return {
+    date: raw.date,
+    muscleGroupsSnapshot: Array.isArray(raw.muscleGroupsSnapshot) ? raw.muscleGroupsSnapshot : [],
+    lifts: Array.isArray(raw.lifts) ? raw.lifts : [],
+  };
+}
+
+function workoutDraftStorageKey(userId = state.authUser?.id) {
+  return userId ? `${WORKOUT_DRAFT_STORAGE_PREFIX}:${userId}` : "";
+}
+
+function readLocalWorkoutDraft(userId = state.authUser?.id) {
+  const key = workoutDraftStorageKey(userId);
+  if (!key) return null;
+  try {
+    const record = JSON.parse(localStorage.getItem(key) || "null");
+    if (!record || record.version !== WORKOUT_DRAFT_VERSION || record.userId !== userId) return null;
+    return record;
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalWorkoutDraft(record) {
+  const key = workoutDraftStorageKey(record?.userId);
+  if (!key) return false;
+  try {
+    localStorage.setItem(key, JSON.stringify(record));
+    return true;
+  } catch {
+    setDraftStatus("error");
+    return false;
+  }
+}
+
+function removeLocalWorkoutDraft(userId = state.authUser?.id) {
+  const key = workoutDraftStorageKey(userId);
+  if (!key) return;
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Storage cleanup is best-effort; the server draft remains authoritative.
+  }
+}
+
+function activeDraftRecord(savedAt = state.draftUpdatedAt || new Date().toISOString()) {
+  if (!state.authUser || !state.workoutDraft) return null;
+  if (!state.draftId) state.draftId = crypto.randomUUID();
+  return {
+    version: WORKOUT_DRAFT_VERSION,
+    userId: state.authUser.id,
+    savedAt,
+    discarded: false,
+    draftId: state.draftId,
+    currentView: state.currentView === "workout" ? "workout" : "dashboard",
+    workoutDraft: state.workoutDraft,
+    liftBuilder: normalizeLiftBuilder(state.liftBuilder),
+  };
+}
+
+function setDraftStatus(status) {
+  state.draftStatus = status;
+  const indicator = document.getElementById("draft-save-status");
+  if (!indicator) return;
+  indicator.className = `draft-save-status ${status}`;
+  indicator.textContent = draftStatusLabel(status);
+}
+
+function draftStatusLabel(status = state.draftStatus) {
+  const labels = {
+    idle: "Auto-save ready",
+    saving: "Saving...",
+    saved: "Saved",
+    device: "Saved on this device",
+    offline: "Offline - saved on this device",
+    error: "Save needs attention",
+  };
+  return labels[status] || labels.idle;
+}
+
+function saveWorkoutDraftLocally() {
+  if (!state.authUser || !state.workoutDraft) return false;
+  state.draftUpdatedAt = new Date().toISOString();
+  return writeLocalWorkoutDraft(activeDraftRecord(state.draftUpdatedAt));
+}
+
+function queueWorkoutDraftSave() {
+  if (!state.authUser || !state.workoutDraft) return;
+  saveWorkoutDraftLocally();
+  clearTimeout(draftSyncTimer);
+
+  if (!navigator.onLine) {
+    setDraftStatus("offline");
+    return;
+  }
+  if (!state.draftBackendAvailable) {
+    setDraftStatus("device");
+    return;
+  }
+
+  setDraftStatus("saving");
+  draftSyncTimer = setTimeout(() => {
+    syncWorkoutDraftToServer().catch(() => setDraftStatus(navigator.onLine ? "error" : "offline"));
+  }, DRAFT_SYNC_DELAY_MS);
+}
+
+function isDraftBackendUnavailable(error) {
+  const code = error?.code || "";
+  const message = `${error?.message || ""} ${error?.details || ""}`.toLowerCase();
+  return ["42P01", "42883", "PGRST202", "PGRST205"].includes(code) || message.includes("workout_drafts");
+}
+
+async function syncWorkoutDraftToServer({ throwOnError = false } = {}) {
+  if (!state.authUser || !state.workoutDraft || !state.supabase) return false;
+  if (!navigator.onLine) {
+    setDraftStatus("offline");
+    return false;
+  }
+  if (!state.draftBackendAvailable) {
+    setDraftStatus("device");
+    return false;
+  }
+
+  if (draftSyncInFlight) {
+    await draftSyncInFlight;
+    if (!state.draftBackendAvailable) return false;
+    if (lastServerDraftSavedAt === state.draftUpdatedAt) return true;
+    return syncWorkoutDraftToServer({ throwOnError });
+  }
+
+  clearTimeout(draftSyncTimer);
+  const record = activeDraftRecord();
+  draftSyncInFlight = Promise.resolve(state.supabase.from("workout_drafts").upsert(
+    {
+      user_id: state.authUser.id,
+      id: record.draftId,
+      workout_date: record.workoutDraft.date,
+      muscle_groups: record.workoutDraft.muscleGroupsSnapshot,
+      lifts: record.workoutDraft.lifts,
+      lift_builder: record.liftBuilder,
+      current_view: record.currentView,
+      updated_at: record.savedAt,
+    },
+    { onConflict: "user_id" }
+  ));
+
+  let error;
+  try {
+    ({ error } = await draftSyncInFlight);
+  } finally {
+    draftSyncInFlight = null;
+  }
+
+  if (error) {
+    if (isDraftBackendUnavailable(error)) {
+      state.draftBackendAvailable = false;
+      setDraftStatus("device");
+      return false;
+    }
+    setDraftStatus(navigator.onLine ? "error" : "offline");
+    if (throwOnError) throw error;
+    return false;
+  }
+
+  lastServerDraftSavedAt = record.savedAt;
+  state.draftBackendAvailable = true;
+  setDraftStatus("saved");
+  return true;
+}
+
+async function loadServerWorkoutDraft() {
+  if (!state.authUser || !state.supabase || !navigator.onLine) return null;
+  const { data, error } = await state.supabase
+    .from("workout_drafts")
+    .select("id, workout_date, muscle_groups, lifts, lift_builder, current_view, updated_at")
+    .eq("user_id", state.authUser.id)
+    .maybeSingle();
+
+  if (error) {
+    if (isDraftBackendUnavailable(error)) state.draftBackendAvailable = false;
+    return null;
+  }
+  if (!data) return null;
+
+  state.draftBackendAvailable = true;
+  return {
+    version: WORKOUT_DRAFT_VERSION,
+    userId: state.authUser.id,
+    savedAt: data.updated_at,
+    discarded: false,
+    draftId: data.id,
+    currentView: data.current_view,
+    workoutDraft: {
+      date: data.workout_date,
+      muscleGroupsSnapshot: data.muscle_groups || [],
+      lifts: data.lifts || [],
+    },
+    liftBuilder: data.lift_builder || {},
+  };
+}
+
+async function deleteServerWorkoutDraft() {
+  if (!state.authUser || !state.supabase || !navigator.onLine || !state.draftBackendAvailable) return false;
+  const { error } = await state.supabase.from("workout_drafts").delete().eq("user_id", state.authUser.id);
+  if (error) {
+    if (isDraftBackendUnavailable(error)) state.draftBackendAvailable = false;
+    return false;
+  }
+  return true;
+}
+
+async function restoreWorkoutDraft() {
+  if (!state.authUser) return;
+  const localRecord = readLocalWorkoutDraft();
+  const serverRecord = await loadServerWorkoutDraft();
+  const localTime = Date.parse(localRecord?.savedAt || "") || 0;
+  const serverTime = Date.parse(serverRecord?.savedAt || "") || 0;
+
+  if (localRecord?.discarded && localTime >= serverTime) {
+    if (await deleteServerWorkoutDraft()) removeLocalWorkoutDraft();
+    return;
+  }
+
+  const record = serverTime > localTime ? serverRecord : localRecord || serverRecord;
+  const draft = normalizeWorkoutDraft(record?.workoutDraft);
+  if (!record || !draft) return;
+
+  state.workoutDraft = draft;
+  state.liftBuilder = normalizeLiftBuilder(record.liftBuilder);
+  state.draftId = record.draftId || crypto.randomUUID();
+  state.currentView = record.currentView === "dashboard" ? "dashboard" : "workout";
+  state.draftUpdatedAt = record.savedAt || new Date().toISOString();
+  lastServerDraftSavedAt = serverRecord && serverTime >= localTime ? serverRecord.savedAt : null;
+  state.draftStatus = serverTime >= localTime && serverRecord ? "saved" : navigator.onLine ? "saving" : "offline";
+  writeLocalWorkoutDraft(activeDraftRecord(state.draftUpdatedAt));
+
+  if (record === localRecord && navigator.onLine && state.draftBackendAvailable) {
+    syncWorkoutDraftToServer().catch(() => setDraftStatus("error"));
+  }
+}
+
+async function discardWorkoutDraft() {
+  if (!state.authUser) return;
+  clearTimeout(draftSyncTimer);
+  const userId = state.authUser.id;
+  const discardedAt = new Date().toISOString();
+  writeLocalWorkoutDraft({
+    version: WORKOUT_DRAFT_VERSION,
+    userId,
+    savedAt: discardedAt,
+    discarded: true,
+  });
+
+  state.workoutDraft = null;
+  state.liftBuilder = null;
+  state.draftUpdatedAt = null;
+  state.draftId = null;
+  lastServerDraftSavedAt = null;
+  state.draftStatus = "idle";
+  state.currentView = "dashboard";
+  render();
+
+  if (await deleteServerWorkoutDraft()) removeLocalWorkoutDraft(userId);
+}
+
+async function clearWorkoutDraftPersistence({ deleteServer = true } = {}) {
+  clearTimeout(draftSyncTimer);
+  const userId = state.authUser?.id;
+  if (deleteServer) await deleteServerWorkoutDraft();
+  removeLocalWorkoutDraft(userId);
+  state.draftUpdatedAt = null;
+  state.draftId = null;
+  lastServerDraftSavedAt = null;
+  state.draftStatus = "idle";
+}
+
+function registerDraftLifecycleHandlers() {
+  if (draftLifecycleRegistered) return;
+  draftLifecycleRegistered = true;
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "hidden" || !state.workoutDraft) return;
+    saveWorkoutDraftLocally();
+    syncWorkoutDraftToServer().catch(() => setDraftStatus(navigator.onLine ? "error" : "offline"));
+  });
+
+  window.addEventListener("beforeunload", () => {
+    if (state.workoutDraft) saveWorkoutDraftLocally();
+  });
+
+  window.addEventListener("online", async () => {
+    if (!state.workoutDraft) {
+      const localRecord = readLocalWorkoutDraft();
+      if (localRecord?.discarded) {
+        state.draftBackendAvailable = true;
+        if (await deleteServerWorkoutDraft()) removeLocalWorkoutDraft();
+      }
+      return;
+    }
+    state.draftBackendAvailable = true;
+    setDraftStatus("saving");
+    syncWorkoutDraftToServer().catch(() => setDraftStatus("error"));
+  });
+
+  window.addEventListener("offline", () => {
+    if (state.workoutDraft) setDraftStatus("offline");
+  });
 }
 
 function loadTheme() {
@@ -478,6 +848,7 @@ function renderDashboard(analytics) {
       <p class="grind-welcome">Welcome to the Grind, ${escapeHtml(displayName)}</p>
       <button id="go-workout" class="cta-add-workout">+ Add Workout</button>
     </div>
+    ${state.workoutDraft ? renderWorkoutResumeCard() : ""}
     <div class="panel">
       <div class="panel-heading-row">
         <h2>Streak Game</h2>
@@ -697,14 +1068,7 @@ function ensureWorkoutState() {
   }
 
   if (!state.liftBuilder) {
-    state.liftBuilder = {
-      liftName: "",
-      setsCount: 1,
-      unit: "kg",
-      currentSet: 1,
-      sets: [],
-      editingLiftId: null,
-    };
+    state.liftBuilder = createLiftBuilder();
   }
 }
 
@@ -715,6 +1079,7 @@ function renderWorkout() {
   const draft = state.workoutDraft;
   const builder = state.liftBuilder;
   const usesCustomSetCount = builder.setsCount > 10;
+  const usesCustomReps = builder.pendingRepsChoice === "custom";
 
   return `
     <div class="workout-nav">
@@ -722,6 +1087,10 @@ function renderWorkout() {
         <span aria-hidden="true">&larr;</span>
         Back
       </button>
+      <div class="draft-save-controls">
+        <span id="draft-save-status" class="draft-save-status ${state.draftStatus}">${draftStatusLabel()}</span>
+        <button class="danger compact-button" type="button" data-discard-workout>Discard</button>
+      </div>
     </div>
     <form id="muscle-select-form" class="panel">
       <h2>Choose Muscle to Train</h2>
@@ -753,25 +1122,25 @@ function renderWorkout() {
                 <option value="lbs" ${builder.unit === "lbs" ? "selected" : ""}>lbs</option>
               </select>
             </label>
-            <button type="submit">Start Set Input</button>
+            <button type="submit">${builder.editingLiftId ? "Restart Set Input" : "Start Set Input"}</button>
           </form>
           ${
-            builder.liftName
+            builder.isConfigured
               ? `
                 <form id="set-form" class="panel">
                   <h2>Set ${builder.currentSet} of ${builder.setsCount}</h2>
                   <label>Reps
                     <select id="reps-count-select" name="reps" required>
                       ${Array.from({ length: 20 }, (_, index) => index + 1)
-                        .map((count) => `<option value="${count}">${count}</option>`)
+                        .map((count) => `<option value="${count}" ${builder.pendingRepsChoice === String(count) ? "selected" : ""}>${count}</option>`)
                         .join("")}
-                      <option value="custom">More than 20...</option>
+                      <option value="custom" ${usesCustomReps ? "selected" : ""}>More than 20...</option>
                     </select>
                   </label>
-                  <label id="custom-reps-field" class="manual-input-field is-disabled">Enter number of reps (21+)
-                    <input type="number" name="customReps" min="21" step="1" value="21" disabled />
+                  <label id="custom-reps-field" class="manual-input-field ${usesCustomReps ? "is-enabled" : "is-disabled"}">Enter number of reps (21+)
+                    <input type="number" name="customReps" min="21" step="1" value="${builder.pendingCustomReps}" ${usesCustomReps ? "required" : "disabled"} />
                   </label>
-                  <label>Weight (${builder.unit})<input type="number" name="weight" min="0" step="0.1" required /></label>
+                  <label>Weight (${builder.unit})<input type="number" name="weight" min="0" step="0.1" value="${escapeHtml(builder.pendingWeight)}" required /></label>
                   <button type="submit">${builder.currentSet === builder.setsCount ? "Submit" : "Next"}</button>
                 </form>
               `
@@ -789,6 +1158,26 @@ function renderWorkout() {
       <h2>Submitted Workouts</h2>
       ${renderSubmittedSessions()}
     </div>
+  `;
+}
+
+function renderWorkoutResumeCard() {
+  const builder = normalizeLiftBuilder(state.liftBuilder);
+  const progress = builder.isConfigured
+    ? `Set ${builder.currentSet} of ${builder.setsCount} - ${builder.liftName}`
+    : `${state.workoutDraft.lifts.length} completed lift${state.workoutDraft.lifts.length === 1 ? "" : "s"}`;
+  return `
+    <section class="panel workout-resume-card">
+      <div>
+        <span class="resume-eyebrow">Workout in progress</span>
+        <h2>Continue ${formatDate(state.workoutDraft.date)}</h2>
+        <p>${escapeHtml(progress)}</p>
+      </div>
+      <div class="inline-actions">
+        <button id="resume-workout" type="button">Resume Workout</button>
+        <button class="danger" type="button" data-discard-workout>Discard</button>
+      </div>
+    </section>
   `;
 }
 
@@ -1078,6 +1467,10 @@ function bindEvents() {
     logoutButton.addEventListener("click", async () => {
       await runBusy(async () => {
         state.selectedCalendarDate = null;
+        if (state.workoutDraft) {
+          saveWorkoutDraftLocally();
+          await syncWorkoutDraftToServer();
+        }
         const { error } = await state.supabase.auth.signOut();
         if (error) throw error;
       });
@@ -1087,6 +1480,7 @@ function bindEvents() {
   document.querySelectorAll("[data-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       state.currentView = button.dataset.tab;
+      if (state.workoutDraft) queueWorkoutDraftSave();
       render();
     });
   });
@@ -1102,14 +1496,33 @@ function bindEvents() {
   if (goWorkout) {
     goWorkout.addEventListener("click", () => {
       state.currentView = "workout";
+      ensureWorkoutState();
+      queueWorkoutDraftSave();
       render();
     });
   }
+
+  const resumeWorkout = document.getElementById("resume-workout");
+  if (resumeWorkout) {
+    resumeWorkout.addEventListener("click", () => {
+      state.currentView = "workout";
+      queueWorkoutDraftSave();
+      render();
+    });
+  }
+
+  document.querySelectorAll("[data-discard-workout]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (!confirm("Discard this unfinished workout? This cannot be undone.")) return;
+      await discardWorkoutDraft();
+    });
+  });
 
   const goSettings = document.getElementById("go-settings");
   if (goSettings) {
     goSettings.addEventListener("click", () => {
       state.currentView = "settings";
+      if (state.workoutDraft) queueWorkoutDraftSave();
       render();
     });
   }
@@ -1118,6 +1531,7 @@ function bindEvents() {
     button.addEventListener("click", () => {
       state.selectedCalendarDate = button.dataset.calendarDate;
       state.currentView = "calendarDay";
+      if (state.workoutDraft) queueWorkoutDraftSave();
       render();
     });
   });
@@ -1126,6 +1540,7 @@ function bindEvents() {
   if (backDashboard) {
     backDashboard.addEventListener("click", () => {
       state.currentView = "dashboard";
+      if (state.workoutDraft) queueWorkoutDraftSave();
       render();
     });
   }
@@ -1140,7 +1555,17 @@ function bindEvents() {
         return;
       }
       state.workoutDraft.muscleGroupsSnapshot = selected;
+      queueWorkoutDraftSave();
       render();
+    });
+
+    muscleSelectForm.querySelectorAll('input[name="muscles"]').forEach((input) => {
+      input.addEventListener("change", () => {
+        state.workoutDraft.muscleGroupsSnapshot = [
+          ...muscleSelectForm.querySelectorAll('input[name="muscles"]:checked'),
+        ].map((item) => item.value);
+        queueWorkoutDraftSave();
+      });
     });
   }
 
@@ -1158,15 +1583,27 @@ function bindEvents() {
         alert("Choose 1-10 sets, or enter a whole number greater than 10.");
         return;
       }
-      state.liftBuilder = {
+      state.liftBuilder = createLiftBuilder({
         liftName,
         setsCount,
         unit,
         currentSet: 1,
         sets: [],
         editingLiftId: state.liftBuilder.editingLiftId || null,
-      };
+        isConfigured: true,
+      });
+      queueWorkoutDraftSave();
       render();
+    });
+
+    liftConfigForm.elements.liftName.addEventListener("input", (event) => {
+      state.liftBuilder.liftName = event.target.value;
+      queueWorkoutDraftSave();
+    });
+
+    liftConfigForm.elements.unit.addEventListener("change", (event) => {
+      state.liftBuilder.unit = event.target.value;
+      queueWorkoutDraftSave();
     });
   }
 
@@ -1181,8 +1618,20 @@ function bindEvents() {
       customSetsField.classList.toggle("is-disabled", !isCustom);
       customSetsInput.required = isCustom;
       customSetsInput.disabled = !isCustom;
+      state.liftBuilder.setsCount = isCustom
+        ? Math.max(11, Number.parseInt(customSetsInput.value, 10) || 11)
+        : Number.parseInt(setsCountSelect.value, 10);
+      queueWorkoutDraftSave();
       if (isCustom) customSetsInput.focus();
     });
+
+    const customSetsInput = document.querySelector('input[name="customSetsCount"]');
+    if (customSetsInput) {
+      customSetsInput.addEventListener("input", () => {
+        state.liftBuilder.setsCount = Math.max(11, Number.parseInt(customSetsInput.value, 10) || 11);
+        queueWorkoutDraftSave();
+      });
+    }
   }
 
   const repsCountSelect = document.getElementById("reps-count-select");
@@ -1196,8 +1645,19 @@ function bindEvents() {
       customRepsField.classList.toggle("is-disabled", !isCustom);
       customRepsInput.required = isCustom;
       customRepsInput.disabled = !isCustom;
+      state.liftBuilder.pendingRepsChoice = repsCountSelect.value;
+      queueWorkoutDraftSave();
       if (isCustom) customRepsInput.focus();
     });
+
+
+    const customRepsInput = document.querySelector('input[name="customReps"]');
+    if (customRepsInput) {
+      customRepsInput.addEventListener("input", () => {
+        state.liftBuilder.pendingCustomReps = Math.max(21, Number.parseInt(customRepsInput.value, 10) || 21);
+        queueWorkoutDraftSave();
+      });
+    }
   }
 
   const setForm = document.getElementById("set-form");
@@ -1237,19 +1697,21 @@ function bindEvents() {
         } else {
           state.workoutDraft.lifts.push(completedLift);
         }
-        state.liftBuilder = {
-          liftName: "",
-          setsCount: 1,
-          unit: "kg",
-          currentSet: 1,
-          sets: [],
-          editingLiftId: null,
-        };
+        state.liftBuilder = createLiftBuilder();
       } else {
         state.liftBuilder.currentSet += 1;
+        state.liftBuilder.pendingRepsChoice = "1";
+        state.liftBuilder.pendingCustomReps = 21;
+        state.liftBuilder.pendingWeight = "";
       }
 
+      queueWorkoutDraftSave();
       render();
+    });
+
+    setForm.elements.weight.addEventListener("input", (event) => {
+      state.liftBuilder.pendingWeight = event.target.value;
+      queueWorkoutDraftSave();
     });
   }
 
@@ -1257,14 +1719,16 @@ function bindEvents() {
     button.addEventListener("click", () => {
       const lift = state.workoutDraft?.lifts.find((item) => item.id === button.dataset.editDraftLift);
       if (!lift) return;
-      state.liftBuilder = {
+      state.liftBuilder = createLiftBuilder({
         liftName: lift.name,
         setsCount: Math.max(1, lift.sets?.length || 1),
         unit: lift.unit,
         currentSet: 1,
         sets: [],
         editingLiftId: lift.id,
-      };
+        isConfigured: true,
+      });
+      queueWorkoutDraftSave();
       render();
     });
   });
@@ -1276,15 +1740,9 @@ function bindEvents() {
       if (!lift || !confirm(`Delete ${lift.name} from this workout session?`)) return;
       state.workoutDraft.lifts = state.workoutDraft.lifts.filter((item) => item.id !== liftId);
       if (state.liftBuilder?.editingLiftId === liftId) {
-        state.liftBuilder = {
-          liftName: "",
-          setsCount: 1,
-          unit: "kg",
-          currentSet: 1,
-          sets: [],
-          editingLiftId: null,
-        };
+        state.liftBuilder = createLiftBuilder();
       }
+      queueWorkoutDraftSave();
       render();
     });
   });
@@ -1294,16 +1752,30 @@ function bindEvents() {
     submitSession.addEventListener("click", async () => {
       if (!state.workoutDraft?.lifts.length) return;
       await runBusy(async () => {
-        const { error } = await state.supabase.from("workout_sessions").insert({
-          user_id: state.authUser.id,
-          workout_date: state.workoutDraft.date,
-          muscle_groups: state.workoutDraft.muscleGroupsSnapshot,
-          lifts: state.workoutDraft.lifts,
-        });
+        const draftSynced = await syncWorkoutDraftToServer({ throwOnError: true });
+        let finalizedFromDraft = false;
 
-        if (error) throw error;
+        if (draftSynced) {
+          const { error: finalizeError } = await state.supabase.rpc("finalize_workout_draft");
+          if (!finalizeError) {
+            finalizedFromDraft = true;
+          } else if (!isDraftBackendUnavailable(finalizeError)) {
+            throw finalizeError;
+          }
+        }
+
+        if (!finalizedFromDraft) {
+          const { error } = await state.supabase.from("workout_sessions").insert({
+            user_id: state.authUser.id,
+            workout_date: state.workoutDraft.date,
+            muscle_groups: state.workoutDraft.muscleGroupsSnapshot,
+            lifts: state.workoutDraft.lifts,
+          });
+          if (error) throw error;
+        }
 
         await loadSessions();
+        await clearWorkoutDraftPersistence({ deleteServer: !finalizedFromDraft });
         state.workoutDraft = null;
         state.liftBuilder = null;
         state.currentView = "dashboard";
