@@ -692,6 +692,7 @@ function ensureWorkoutState() {
       unit: "kg",
       currentSet: 1,
       sets: [],
+      editingLiftId: null,
     };
   }
 }
@@ -732,7 +733,7 @@ function renderWorkout() {
                 <option value="custom" ${usesCustomSetCount ? "selected" : ""}>More than 10...</option>
               </select>
             </label>
-            <label id="custom-sets-field" ${usesCustomSetCount ? "" : "hidden"}>Enter number of sets (11+)
+            <label id="custom-sets-field" class="manual-input-field ${usesCustomSetCount ? "is-enabled" : "is-disabled"}">Enter number of sets (11+)
               <input type="number" name="customSetsCount" min="11" step="1" value="${usesCustomSetCount ? builder.setsCount : 11}" ${usesCustomSetCount ? "required" : "disabled"} />
             </label>
             <label>Weight unit
@@ -756,7 +757,7 @@ function renderWorkout() {
                       <option value="custom">More than 20...</option>
                     </select>
                   </label>
-                  <label id="custom-reps-field" hidden>Enter number of reps (21+)
+                  <label id="custom-reps-field" class="manual-input-field is-disabled">Enter number of reps (21+)
                     <input type="number" name="customReps" min="21" step="1" value="21" disabled />
                   </label>
                   <label>Weight (${builder.unit})<input type="number" name="weight" min="0" step="0.1" required /></label>
@@ -768,7 +769,7 @@ function renderWorkout() {
           <div class="panel">
             <h2>Current Session Lifts</h2>
             ${draft.lifts.length ? renderDraftLifts(draft.lifts) : "<p>No lift added yet.</p>"}
-            <button id="submit-session" ${draft.lifts.length ? "" : "disabled"}>${state.busy ? "Saving..." : "Submit Workout Session"}</button>
+            <button id="submit-session" class="submit-workout-button" type="button" ${draft.lifts.length ? "" : "disabled"}>${state.busy ? "Saving..." : "Submit Workout Session"}</button>
           </div>
         `
         : ""
@@ -813,6 +814,11 @@ function renderDraftLifts(lifts) {
           <strong>${escapeHtml(lift.name)} (${lift.unit})</strong>
           <span>${lift.sets.length} sets</span>
           <span>${lift.sets.map((set) => `S${set.setNumber}: ${set.reps} reps @ ${set.weight}`).join(" | ")}</span>
+          ${state.liftBuilder?.editingLiftId === lift.id ? `<span class="draft-lift-editing">Editing from Set 1</span>` : ""}
+          <div class="inline-actions draft-lift-actions">
+            <button type="button" class="ghost" data-edit-draft-lift="${escapeHtml(lift.id)}">Edit</button>
+            <button type="button" class="danger" data-delete-draft-lift="${escapeHtml(lift.id)}">Delete</button>
+          </div>
         </div>
       `
     )
@@ -1141,7 +1147,14 @@ function bindEvents() {
         alert("Choose 1-10 sets, or enter a whole number greater than 10.");
         return;
       }
-      state.liftBuilder = { liftName, setsCount, unit, currentSet: 1, sets: [] };
+      state.liftBuilder = {
+        liftName,
+        setsCount,
+        unit,
+        currentSet: 1,
+        sets: [],
+        editingLiftId: state.liftBuilder.editingLiftId || null,
+      };
       render();
     });
   }
@@ -1153,7 +1166,8 @@ function bindEvents() {
       const customSetsInput = customSetsField?.querySelector("input");
       const isCustom = setsCountSelect.value === "custom";
       if (!customSetsField || !customSetsInput) return;
-      customSetsField.hidden = !isCustom;
+      customSetsField.classList.toggle("is-enabled", isCustom);
+      customSetsField.classList.toggle("is-disabled", !isCustom);
       customSetsInput.required = isCustom;
       customSetsInput.disabled = !isCustom;
       if (isCustom) customSetsInput.focus();
@@ -1167,7 +1181,8 @@ function bindEvents() {
       const customRepsInput = customRepsField?.querySelector("input");
       const isCustom = repsCountSelect.value === "custom";
       if (!customRepsField || !customRepsInput) return;
-      customRepsField.hidden = !isCustom;
+      customRepsField.classList.toggle("is-enabled", isCustom);
+      customRepsField.classList.toggle("is-disabled", !isCustom);
       customRepsInput.required = isCustom;
       customRepsInput.disabled = !isCustom;
       if (isCustom) customRepsInput.focus();
@@ -1199,13 +1214,26 @@ function bindEvents() {
       });
 
       if (state.liftBuilder.currentSet === state.liftBuilder.setsCount) {
-        state.workoutDraft.lifts.push({
-          id: crypto.randomUUID(),
+        const completedLift = {
+          id: state.liftBuilder.editingLiftId || crypto.randomUUID(),
           name: state.liftBuilder.liftName,
           unit: state.liftBuilder.unit,
           sets: state.liftBuilder.sets,
-        });
-        state.liftBuilder = { liftName: "", setsCount: 1, unit: "kg", currentSet: 1, sets: [] };
+        };
+        const editingIndex = state.workoutDraft.lifts.findIndex((lift) => lift.id === state.liftBuilder.editingLiftId);
+        if (editingIndex >= 0) {
+          state.workoutDraft.lifts.splice(editingIndex, 1, completedLift);
+        } else {
+          state.workoutDraft.lifts.push(completedLift);
+        }
+        state.liftBuilder = {
+          liftName: "",
+          setsCount: 1,
+          unit: "kg",
+          currentSet: 1,
+          sets: [],
+          editingLiftId: null,
+        };
       } else {
         state.liftBuilder.currentSet += 1;
       }
@@ -1213,6 +1241,42 @@ function bindEvents() {
       render();
     });
   }
+
+  document.querySelectorAll("[data-edit-draft-lift]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const lift = state.workoutDraft?.lifts.find((item) => item.id === button.dataset.editDraftLift);
+      if (!lift) return;
+      state.liftBuilder = {
+        liftName: lift.name,
+        setsCount: Math.max(1, lift.sets?.length || 1),
+        unit: lift.unit,
+        currentSet: 1,
+        sets: [],
+        editingLiftId: lift.id,
+      };
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-delete-draft-lift]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const liftId = button.dataset.deleteDraftLift;
+      const lift = state.workoutDraft?.lifts.find((item) => item.id === liftId);
+      if (!lift || !confirm(`Delete ${lift.name} from this workout session?`)) return;
+      state.workoutDraft.lifts = state.workoutDraft.lifts.filter((item) => item.id !== liftId);
+      if (state.liftBuilder?.editingLiftId === liftId) {
+        state.liftBuilder = {
+          liftName: "",
+          setsCount: 1,
+          unit: "kg",
+          currentSet: 1,
+          sets: [],
+          editingLiftId: null,
+        };
+      }
+      render();
+    });
+  });
 
   const submitSession = document.getElementById("submit-session");
   if (submitSession) {

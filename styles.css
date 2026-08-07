@@ -296,6 +296,24 @@ textarea {
   background: var(--input-bg);
 }
 
+input:disabled,
+select:disabled,
+textarea:disabled {
+  border-color: color-mix(in srgb, var(--line) 74%, var(--muted) 26%);
+  background: color-mix(in srgb, var(--input-bg) 76%, var(--muted) 24%);
+  color: color-mix(in srgb, var(--input-ink) 48%, var(--muted) 52%);
+  cursor: not-allowed;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+button:disabled:hover {
+  transform: none;
+}
+
 select[multiple] {
   min-height: 130px;
 }
@@ -314,6 +332,7 @@ select[multiple] {
 
 .inline-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
 }
 
@@ -777,6 +796,41 @@ body[data-theme="royal"] .cta-add-workout {
 .back-button span {
   font-size: 1.1rem;
   line-height: 1;
+}
+
+.manual-input-field {
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+
+.manual-input-field.is-disabled {
+  border-color: color-mix(in srgb, var(--line) 78%, var(--muted) 22%);
+  background: color-mix(in srgb, var(--panel) 86%, var(--muted) 14%);
+  color: var(--muted);
+}
+
+.manual-input-field.is-enabled {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--line) 42%);
+  background: color-mix(in srgb, var(--panel) 91%, var(--accent) 9%);
+}
+
+.submit-workout-button:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent-2) 78%, var(--line) 22%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 82%, var(--panel) 18%), var(--accent-2));
+  color: var(--active-ink);
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.draft-lift-actions {
+  margin-top: 0.45rem;
+}
+
+.draft-lift-editing {
+  color: var(--accent-2);
+  font-size: 0.88rem;
+  font-weight: 700;
 }
 
 .workout-muscle-section {
