@@ -702,7 +702,7 @@ function renderWorkout() {
   const secondaryMuscles = getMusclesByCategory("secondary");
   const draft = state.workoutDraft;
   const builder = state.liftBuilder;
-  const usesCustomSetCount = builder.setsCount > 20;
+  const usesCustomSetCount = builder.setsCount > 10;
 
   return `
     <div class="workout-nav">
@@ -726,14 +726,14 @@ function renderWorkout() {
             <label>Name of lifts<input type="text" name="liftName" value="${escapeHtml(builder.liftName)}" required /></label>
             <label>How many sets
               <select id="sets-count-select" name="setsCount" required>
-                ${Array.from({ length: 20 }, (_, index) => index + 1)
+                ${Array.from({ length: 10 }, (_, index) => index + 1)
                   .map((count) => `<option value="${count}" ${!usesCustomSetCount && builder.setsCount === count ? "selected" : ""}>${count}</option>`)
                   .join("")}
-                <option value="custom" ${usesCustomSetCount ? "selected" : ""}>More than 20...</option>
+                <option value="custom" ${usesCustomSetCount ? "selected" : ""}>More than 10...</option>
               </select>
             </label>
-            <label id="custom-sets-field" ${usesCustomSetCount ? "" : "hidden"}>Enter number of sets
-              <input type="number" name="customSetsCount" min="21" step="1" value="${usesCustomSetCount ? builder.setsCount : 21}" ${usesCustomSetCount ? "required" : ""} />
+            <label id="custom-sets-field" ${usesCustomSetCount ? "" : "hidden"}>Enter number of sets (11+)
+              <input type="number" name="customSetsCount" min="11" step="1" value="${usesCustomSetCount ? builder.setsCount : 11}" ${usesCustomSetCount ? "required" : "disabled"} />
             </label>
             <label>Weight unit
               <select name="unit">
@@ -748,8 +748,18 @@ function renderWorkout() {
               ? `
                 <form id="set-form" class="panel">
                   <h2>Set ${builder.currentSet} of ${builder.setsCount}</h2>
-                  <label>rep<input type="number" name="reps" min="0" required /></label>
-                  <label>weight (${builder.unit})<input type="number" name="weight" min="0" step="0.1" required /></label>
+                  <label>Reps
+                    <select id="reps-count-select" name="reps" required>
+                      ${Array.from({ length: 20 }, (_, index) => index + 1)
+                        .map((count) => `<option value="${count}">${count}</option>`)
+                        .join("")}
+                      <option value="custom">More than 20...</option>
+                    </select>
+                  </label>
+                  <label id="custom-reps-field" hidden>Enter number of reps (21+)
+                    <input type="number" name="customReps" min="21" step="1" value="21" disabled />
+                  </label>
+                  <label>Weight (${builder.unit})<input type="number" name="weight" min="0" step="0.1" required /></label>
                   <button type="submit">${builder.currentSet === builder.setsCount ? "Submit" : "Next"}</button>
                 </form>
               `
@@ -852,16 +862,14 @@ function renderMuscleDayChart(range, category, title) {
       <div class="track-chart">
         ${rows
           .map((row) => {
-            const width = maxCount > 0 && row.count > 0 ? Math.max((row.count / maxCount) * 100, 8) : 0;
+            const height = maxCount > 0 && row.count > 0 ? Math.max((row.count / maxCount) * 100, 8) : 0;
             return `
-              <div class="chart-row">
-                <div class="chart-label">
-                  <strong>${escapeHtml(row.name)}</strong>
-                  <span>${row.count} day${row.count === 1 ? "" : "s"}</span>
-                </div>
+              <div class="chart-column">
+                <span class="chart-value">${row.count} day${row.count === 1 ? "" : "s"}</span>
                 <div class="chart-track" aria-label="${escapeHtml(row.name)} trained ${row.count} day${row.count === 1 ? "" : "s"}">
-                  <div class="chart-bar" style="width:${width}%"></div>
+                  <div class="chart-bar" style="height:${height}%"></div>
                 </div>
+                <strong class="chart-label">${escapeHtml(row.name)}</strong>
               </div>
             `;
           })
@@ -1129,8 +1137,8 @@ function bindEvents() {
         usesCustomSetCount ? event.target.elements.customSetsCount.value : event.target.elements.setsCount.value
       );
       const unit = event.target.elements.unit.value;
-      if (!liftName || !Number.isInteger(setsCount) || setsCount < 1 || (usesCustomSetCount && setsCount <= 20)) {
-        alert("Choose 1-20 sets, or enter a whole number greater than 20.");
+      if (!liftName || !Number.isInteger(setsCount) || setsCount < 1 || (usesCustomSetCount && setsCount <= 10)) {
+        alert("Choose 1-10 sets, or enter a whole number greater than 10.");
         return;
       }
       state.liftBuilder = { liftName, setsCount, unit, currentSet: 1, sets: [] };
@@ -1147,7 +1155,22 @@ function bindEvents() {
       if (!customSetsField || !customSetsInput) return;
       customSetsField.hidden = !isCustom;
       customSetsInput.required = isCustom;
+      customSetsInput.disabled = !isCustom;
       if (isCustom) customSetsInput.focus();
+    });
+  }
+
+  const repsCountSelect = document.getElementById("reps-count-select");
+  if (repsCountSelect) {
+    repsCountSelect.addEventListener("change", () => {
+      const customRepsField = document.getElementById("custom-reps-field");
+      const customRepsInput = customRepsField?.querySelector("input");
+      const isCustom = repsCountSelect.value === "custom";
+      if (!customRepsField || !customRepsInput) return;
+      customRepsField.hidden = !isCustom;
+      customRepsInput.required = isCustom;
+      customRepsInput.disabled = !isCustom;
+      if (isCustom) customRepsInput.focus();
     });
   }
 
@@ -1155,10 +1178,17 @@ function bindEvents() {
   if (setForm) {
     setForm.addEventListener("submit", (event) => {
       event.preventDefault();
-      const reps = Number(event.target.elements.reps.value);
+      const usesCustomReps = event.target.elements.reps.value === "custom";
+      const reps = Number(usesCustomReps ? event.target.elements.customReps.value : event.target.elements.reps.value);
       const weight = Number(event.target.elements.weight.value);
-      if (!Number.isFinite(reps) || !Number.isFinite(weight) || reps < 0 || weight < 0) {
-        alert("Please enter valid reps and weight.");
+      if (
+        !Number.isInteger(reps) ||
+        reps < 1 ||
+        (usesCustomReps && reps <= 20) ||
+        !Number.isFinite(weight) ||
+        weight < 0
+      ) {
+        alert("Choose 1-20 reps, or enter a whole number greater than 20. Weight must be zero or higher.");
         return;
       }
 
