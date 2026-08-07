@@ -478,6 +478,8 @@ select[multiple] {
 
 .calendar-day span {
   font-size: 0.85rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .calendar-day.selected-day {

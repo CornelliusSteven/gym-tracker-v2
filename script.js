@@ -285,21 +285,22 @@ function computeWeeklyStreak(uniqueDatesAsc) {
 function computeAnalytics() {
   const uniqueDates = [...new Set(state.sessions.map((row) => row.date))].sort();
   const today = parseIso(todayIso());
-  const weekStart = weekStartMonday(today);
+  const last30Start = new Date(today);
+  last30Start.setDate(today.getDate() - 29);
   const month = today.getMonth();
   const year = today.getFullYear();
 
-  const weekDays = new Set();
+  const last30Days = new Set();
   const monthDays = new Set();
-  const weekMuscles = {};
+  const last30Muscles = {};
   const monthMuscles = {};
 
   state.sessions.forEach((session) => {
     const date = parseIso(session.date);
-    if (date >= weekStart && date <= today) {
-      weekDays.add(session.date);
+    if (date >= last30Start && date <= today) {
+      last30Days.add(session.date);
       session.muscleGroupsSnapshot.forEach((name) => {
-        weekMuscles[name] = (weekMuscles[name] || 0) + 1;
+        last30Muscles[name] = (last30Muscles[name] || 0) + 1;
       });
     }
     if (date.getMonth() === month && date.getFullYear() === year) {
@@ -313,9 +314,9 @@ function computeAnalytics() {
   const xp = uniqueDates.length * 20;
   return {
     sessions: state.sessions,
-    weekGymDays: weekDays.size,
+    last30GymDays: last30Days.size,
     monthGymDays: monthDays.size,
-    weekMuscles,
+    last30Muscles,
     monthMuscles,
     xp,
     level: Math.floor(xp / 100) + 1,
@@ -463,14 +464,14 @@ function streakMetric(label, value, isLit) {
 function renderDashboard(analytics) {
   const recentWorkoutDate = state.sessions[0]?.date;
   const recentWorkouts = recentWorkoutDate ? state.sessions.filter((session) => session.date === recentWorkoutDate) : [];
-  const top = topPair(analytics.weekMuscles);
+  const top = topPair(analytics.last30Muscles);
   const sharePayload = getSharePayload(analytics, top);
   const displayName = state.profile?.name?.trim() || "Gym Athlete";
   return `
     <div class="metrics">
       ${streakMetric("Current Streak", `${analytics.currentStreak} gym days`, analytics.currentStreak > 0)}
       ${streakMetric("Longest Streak", `${analytics.longestStreak} gym days`, analytics.longestStreak > 0)}
-      ${metric("Gym Days This Week", analytics.weekGymDays)}
+      ${metric("Gym Days Last 30 Days", analytics.last30GymDays)}
       ${metric("Gym Days This Month", analytics.monthGymDays)}
     </div>
     <div class="dashboard-cta-row">
@@ -504,7 +505,7 @@ function renderDashboard(analytics) {
       ${renderMonthlyCalendar(state.sessions)}
     </div>
     <div class="panel">
-      <h2>Share This Week</h2>
+      <h2>Share My Personal Gym Card</h2>
       ${renderShareCard(sharePayload)}
       <div class="inline-actions">
         <button id="copy-share-summary">Copy Summary</button>
@@ -520,7 +521,7 @@ function getSharePayload(analytics, topMuscle) {
     name,
     currentStreak: analytics.currentStreak,
     weeklyStreak: analytics.weeklyStreak,
-    weekGymDays: analytics.weekGymDays,
+    last30GymDays: analytics.last30GymDays,
     topMuscle: topMuscle ? `${topMuscle[0]} (${topMuscle[1]}x)` : "No workouts yet",
     level: analytics.level,
     xp: analytics.xp,
@@ -531,11 +532,11 @@ function getSharePayload(analytics, topMuscle) {
 function renderShareCard(payload) {
   return `
     <article class="share-card">
-      <h3>${escapeHtml(payload.name)} - Weekly Gym Update</h3>
+      <h3>${escapeHtml(payload.name)} - Personal Gym Update</h3>
       <div class="share-grid">
         <div><strong>Current Streak</strong><span>${payload.currentStreak} days</span></div>
         <div><strong>Weekly Streak</strong><span>${payload.weeklyStreak} weeks</span></div>
-        <div><strong>Gym Days</strong><span>${payload.weekGymDays} this week</span></div>
+        <div><strong>Gym Days</strong><span>${payload.last30GymDays} in the last 30 days</span></div>
         <div><strong>Top Muscle</strong><span>${escapeHtml(payload.topMuscle)}</span></div>
         <div><strong>Level</strong><span>${payload.level}</span></div>
         <div><strong>XP</strong><span>${payload.xp} total (${payload.xpIntoLevel}/100)</span></div>
@@ -550,14 +551,15 @@ function renderMonthlyCalendar(sessions) {
   const month = today.getMonth();
   const totalDays = new Date(year, month + 1, 0).getDate();
   const monthName = today.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-  const gymDates = new Set(
-    sessions
-      .filter((session) => {
-        const date = parseIso(session.date);
-        return date.getFullYear() === year && date.getMonth() === month;
-      })
-      .map((session) => Number(session.date.slice(8, 10)))
-  );
+  const primaryNames = new Set(getMusclesByCategory("primary").map((muscle) => muscle.name));
+  const sessionsByDate = new Map();
+
+  sessions.forEach((session) => {
+    const date = parseIso(session.date);
+    if (date.getFullYear() !== year || date.getMonth() !== month) return;
+    if (!sessionsByDate.has(session.date)) sessionsByDate.set(session.date, []);
+    sessionsByDate.get(session.date).push(session);
+  });
 
   return `
     <p>${monthName}</p>
@@ -565,11 +567,20 @@ function renderMonthlyCalendar(sessions) {
       ${Array.from({ length: totalDays }, (_, index) => {
         const day = index + 1;
         const iso = `${year}-${`${month + 1}`.padStart(2, "0")}-${`${day}`.padStart(2, "0")}`;
-        const isGym = gymDates.has(day);
+        const daySessions = sessionsByDate.get(iso) || [];
+        const isGym = daySessions.length > 0;
+        const trainedPrimaryMuscles = [
+          ...new Set(
+            daySessions.flatMap((session) =>
+              (session.muscleGroupsSnapshot || []).filter((name) => primaryNames.has(name))
+            )
+          ),
+        ];
+        const dayLabel = isGym ? trainedPrimaryMuscles.join(", ") || "Workout" : "Rest";
         return `
           <button class="calendar-day ${isGym ? "gym-day" : "rest-day"} ${state.selectedCalendarDate === iso ? "selected-day" : ""}" data-calendar-date="${iso}">
             <strong>${day}</strong>
-            <span>${isGym ? "Gym" : "Rest"}</span>
+            <span>${escapeHtml(dayLabel)}</span>
           </button>
         `;
       }).join("")}
@@ -1324,12 +1335,12 @@ function bindEvents() {
   if (copyShareSummary) {
     copyShareSummary.addEventListener("click", async () => {
       const analytics = computeAnalytics();
-      const payload = getSharePayload(analytics, topPair(analytics.weekMuscles));
+      const payload = getSharePayload(analytics, topPair(analytics.last30Muscles));
       const summary = [
-        `${payload.name} - Weekly Gym Update`,
+        `${payload.name} - Personal Gym Update`,
         `Current Streak: ${payload.currentStreak} days`,
         `Weekly Streak: ${payload.weeklyStreak} weeks`,
-        `Gym Days This Week: ${payload.weekGymDays}`,
+        `Gym Days Last 30 Days: ${payload.last30GymDays}`,
         `Top Muscle: ${payload.topMuscle}`,
         `Level: ${payload.level}`,
         `XP: ${payload.xp} (${payload.xpIntoLevel}/100 to next level)`,
@@ -1348,7 +1359,7 @@ function bindEvents() {
   if (downloadShareCard) {
     downloadShareCard.addEventListener("click", () => {
       const analytics = computeAnalytics();
-      downloadShareImage(getSharePayload(analytics, topPair(analytics.weekMuscles)));
+      downloadShareImage(getSharePayload(analytics, topPair(analytics.last30Muscles)));
     });
   }
 
@@ -1446,12 +1457,12 @@ function downloadShareImage(payload) {
   ctx.fillText("The Gym Grind", 118, 140);
   ctx.font = "600 34px Arial";
   ctx.fillStyle = theme.muted;
-  ctx.fillText(payload.name, 118, 188);
+  ctx.fillText(`${payload.name} - Personal Gym Update`, 118, 188, 964);
 
   const stats = [
     ["Current Streak", `${payload.currentStreak} days`],
     ["Weekly Streak", `${payload.weeklyStreak} weeks`],
-    ["Gym Days", `${payload.weekGymDays} this week`],
+    ["Gym Days (30D)", `${payload.last30GymDays} days`],
     ["Top Muscle", payload.topMuscle],
     ["Level", `${payload.level}`],
     ["XP", `${payload.xp} total (${payload.xpIntoLevel}/100)`],
@@ -1480,7 +1491,7 @@ function downloadShareImage(payload) {
 
   const link = document.createElement("a");
   link.href = canvas.toDataURL("image/png");
-  link.download = "gym-weekly-share-card.png";
+  link.download = "gym-personal-share-card.png";
   link.click();
 }
 
