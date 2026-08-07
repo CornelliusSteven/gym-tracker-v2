@@ -226,10 +226,6 @@ function escapeHtml(text) {
     .replaceAll("'", "&#039;");
 }
 
-function getAllMuscles() {
-  return state.muscles.map((row) => row.name);
-}
-
 function getMusclesByCategory(category) {
   return state.muscles.filter((row) => row.category === category);
 }
@@ -424,7 +420,7 @@ function renderAuthed() {
       </header>
       <nav class="tabs">
         ${tab("dashboard", "Dashboard")}
-        ${tab("streak", "Track")}
+        ${tab("streak", "Analytics")}
         ${tab("muscles", "Muscle Groups")}
       </nav>
       <section class="content">${renderView(analytics)}</section>
@@ -702,30 +698,24 @@ function ensureWorkoutState() {
 
 function renderWorkout() {
   ensureWorkoutState();
-  const muscles = getAllMuscles();
+  const primaryMuscles = getMusclesByCategory("primary");
+  const secondaryMuscles = getMusclesByCategory("secondary");
   const draft = state.workoutDraft;
   const builder = state.liftBuilder;
+  const usesCustomSetCount = builder.setsCount > 20;
 
   return `
-    <div class="panel">
-      <button id="back-dashboard" class="ghost">Back</button>
+    <div class="workout-nav">
+      <button id="back-dashboard" class="back-button" type="button" aria-label="Back to dashboard">
+        <span aria-hidden="true">&larr;</span>
+        Back
+      </button>
     </div>
     <form id="muscle-select-form" class="panel">
-      <h2>Workout Tracker</h2>
+      <h2>Choose Muscle to Train</h2>
       <p><strong>Date:</strong> ${formatDate(draft.date)}</p>
-      <p>What muscle group do you want to train?</p>
-      <div class="muscle-card-grid">
-        ${muscles
-          .map(
-            (name, index) => `
-              <label class="muscle-card" for="muscle_${index}">
-                <input id="muscle_${index}" type="checkbox" name="muscles" value="${escapeHtml(name)}" ${draft.muscleGroupsSnapshot.includes(name) ? "checked" : ""} />
-                <span class="muscle-card-body">${escapeHtml(name)}</span>
-              </label>
-            `
-          )
-          .join("")}
-      </div>
+      ${renderWorkoutMuscleGroup("Primary", "Main muscle focus", primaryMuscles, draft)}
+      ${renderWorkoutMuscleGroup("Secondary", "Supporting muscle focus", secondaryMuscles, draft)}
       <button type="submit">Save Muscle Groups</button>
     </form>
     ${
@@ -734,7 +724,17 @@ function renderWorkout() {
           <form id="lift-config-form" class="panel">
             <h2>Lift Setup</h2>
             <label>Name of lifts<input type="text" name="liftName" value="${escapeHtml(builder.liftName)}" required /></label>
-            <label>How many set<input type="number" name="setsCount" min="1" max="12" value="${builder.setsCount}" required /></label>
+            <label>How many sets
+              <select id="sets-count-select" name="setsCount" required>
+                ${Array.from({ length: 20 }, (_, index) => index + 1)
+                  .map((count) => `<option value="${count}" ${!usesCustomSetCount && builder.setsCount === count ? "selected" : ""}>${count}</option>`)
+                  .join("")}
+                <option value="custom" ${usesCustomSetCount ? "selected" : ""}>More than 20...</option>
+              </select>
+            </label>
+            <label id="custom-sets-field" ${usesCustomSetCount ? "" : "hidden"}>Enter number of sets
+              <input type="number" name="customSetsCount" min="21" step="1" value="${usesCustomSetCount ? builder.setsCount : 21}" ${usesCustomSetCount ? "required" : ""} />
+            </label>
             <label>Weight unit
               <select name="unit">
                 <option value="kg" ${builder.unit === "kg" ? "selected" : ""}>kg</option>
@@ -770,6 +770,31 @@ function renderWorkout() {
   `;
 }
 
+function renderWorkoutMuscleGroup(title, description, muscles, draft) {
+  return `
+    <section class="workout-muscle-section" aria-labelledby="${title.toLowerCase()}-muscle-title">
+      <div class="workout-muscle-heading">
+        <h3 id="${title.toLowerCase()}-muscle-title">${title}</h3>
+        <span>${description}</span>
+      </div>
+      <div class="muscle-card-grid">
+        ${muscles.length
+          ? muscles
+              .map(
+                (muscle, index) => `
+                  <label class="muscle-card" for="muscle_${muscle.category}_${index}">
+                    <input id="muscle_${muscle.category}_${index}" type="checkbox" name="muscles" value="${escapeHtml(muscle.name)}" ${draft.muscleGroupsSnapshot.includes(muscle.name) ? "checked" : ""} />
+                    <span class="muscle-card-body">${escapeHtml(muscle.name)}</span>
+                  </label>
+                `
+              )
+              .join("")
+          : `<p class="hint">No ${title.toLowerCase()} muscle groups available.</p>`}
+      </div>
+    </section>
+  `;
+}
+
 function renderDraftLifts(lifts) {
   return lifts
     .map(
@@ -788,15 +813,16 @@ function renderStreak() {
   return `
     <div class="panel track-panel">
       <div>
-        <h2>Track</h2>
-        <p>Visual chart of how many different gym days each muscle has been trained.</p>
+        <h2>Analytics</h2>
+        <p>See how many different gym days each muscle has been trained.</p>
       </div>
-      <div class="track-filter-row" aria-label="Track chart time filter">
+      <div class="track-filter-row" aria-label="Analytics time filter">
         ${trackRangeButton("allTime", "All time")}
         ${trackRangeButton("thisMonth", "This month")}
         ${trackRangeButton("last30", "Last 30 days")}
       </div>
-      ${renderMuscleDayChart(state.trackRange)}
+      ${renderMuscleDayChart(state.trackRange, "primary", "Primary Muscle Chart")}
+      ${renderMuscleDayChart(state.trackRange, "secondary", "Secondary Muscle Chart")}
     </div>
   `;
 }
@@ -805,34 +831,47 @@ function trackRangeButton(range, label) {
   return `<button class="track-filter ${state.trackRange === range ? "active" : ""}" data-track-range="${range}">${label}</button>`;
 }
 
-function renderMuscleDayChart(range) {
-  const rows = getMuscleDayCounts(range);
-  if (!rows.length) return `<p>No muscle data for this period yet.</p>`;
+function renderMuscleDayChart(range, category, title) {
+  const rows = getMuscleDayCounts(range, category);
+  if (!rows.length) {
+    return `
+      <section class="analytics-chart-section ${category}">
+        <h3>${title}</h3>
+        <p>No ${category} muscle groups available.</p>
+      </section>
+    `;
+  }
 
   const maxCount = Math.max(...rows.map((row) => row.count));
   return `
-    <div class="track-chart">
-      ${rows
-        .map((row) => {
-          const width = Math.max((row.count / maxCount) * 100, 8);
-          return `
-            <div class="chart-row">
-              <div class="chart-label">
-                <strong>${escapeHtml(row.name)}</strong>
-                <span>${row.count} day${row.count > 1 ? "s" : ""}</span>
+    <section class="analytics-chart-section ${category}">
+      <div class="analytics-chart-heading">
+        <h3>${title}</h3>
+        <span>${rows.reduce((sum, row) => sum + row.count, 0)} total muscle days</span>
+      </div>
+      <div class="track-chart">
+        ${rows
+          .map((row) => {
+            const width = maxCount > 0 && row.count > 0 ? Math.max((row.count / maxCount) * 100, 8) : 0;
+            return `
+              <div class="chart-row">
+                <div class="chart-label">
+                  <strong>${escapeHtml(row.name)}</strong>
+                  <span>${row.count} day${row.count === 1 ? "" : "s"}</span>
+                </div>
+                <div class="chart-track" aria-label="${escapeHtml(row.name)} trained ${row.count} day${row.count === 1 ? "" : "s"}">
+                  <div class="chart-bar" style="width:${width}%"></div>
+                </div>
               </div>
-              <div class="chart-track" aria-label="${escapeHtml(row.name)} trained ${row.count} day${row.count > 1 ? "s" : ""}">
-                <div class="chart-bar" style="width:${width}%"></div>
-              </div>
-            </div>
-          `;
-        })
-        .join("")}
-    </div>
+            `;
+          })
+          .join("")}
+      </div>
+    </section>
   `;
 }
 
-function getMuscleDayCounts(range) {
+function getMuscleDayCounts(range, category) {
   const today = parseIso(todayIso());
   const month = today.getMonth();
   const year = today.getFullYear();
@@ -855,8 +894,8 @@ function getMuscleDayCounts(range) {
     });
   });
 
-  return [...muscleDays.entries()]
-    .map(([name, dates]) => ({ name, count: dates.size }))
+  return getMusclesByCategory(category)
+    .map((muscle) => ({ name: muscle.name, count: muscleDays.get(muscle.name)?.size || 0 }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
@@ -1085,11 +1124,30 @@ function bindEvents() {
     liftConfigForm.addEventListener("submit", (event) => {
       event.preventDefault();
       const liftName = event.target.elements.liftName.value.trim();
-      const setsCount = Number(event.target.elements.setsCount.value);
+      const usesCustomSetCount = event.target.elements.setsCount.value === "custom";
+      const setsCount = Number(
+        usesCustomSetCount ? event.target.elements.customSetsCount.value : event.target.elements.setsCount.value
+      );
       const unit = event.target.elements.unit.value;
-      if (!liftName || setsCount < 1) return;
+      if (!liftName || !Number.isInteger(setsCount) || setsCount < 1 || (usesCustomSetCount && setsCount <= 20)) {
+        alert("Choose 1-20 sets, or enter a whole number greater than 20.");
+        return;
+      }
       state.liftBuilder = { liftName, setsCount, unit, currentSet: 1, sets: [] };
       render();
+    });
+  }
+
+  const setsCountSelect = document.getElementById("sets-count-select");
+  if (setsCountSelect) {
+    setsCountSelect.addEventListener("change", () => {
+      const customSetsField = document.getElementById("custom-sets-field");
+      const customSetsInput = customSetsField?.querySelector("input");
+      const isCustom = setsCountSelect.value === "custom";
+      if (!customSetsField || !customSetsInput) return;
+      customSetsField.hidden = !isCustom;
+      customSetsInput.required = isCustom;
+      if (isCustom) customSetsInput.focus();
     });
   }
 
