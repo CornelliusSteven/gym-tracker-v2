@@ -241,21 +241,24 @@ body[data-theme="pastel"] .metric h3 {
 }
 
 .streak-metric {
-  padding-right: 2.35rem;
+  padding-right: 2.75rem;
 }
 
 .fire-icon {
   position: absolute;
-  top: 0.7rem;
-  right: 0.75rem;
-  width: 1.45rem;
-  height: 1.45rem;
+  top: 0.6rem;
+  right: 0.7rem;
+  width: 1.75rem;
+  height: 1.75rem;
   color: var(--fire);
   line-height: 1;
+  transform-origin: center bottom;
   transition: color 0.2s ease, filter 0.2s ease, opacity 0.2s ease;
 }
 
 .fire-icon svg {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 100%;
   height: 100%;
@@ -268,13 +271,72 @@ body[data-theme="pastel"] .metric h3 {
 
 .fire-lit {
   opacity: 1;
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--fire) 72%, transparent));
+  filter:
+    drop-shadow(0 0 5px color-mix(in srgb, var(--fire-core) 92%, transparent))
+    drop-shadow(0 0 12px color-mix(in srgb, var(--fire) 82%, transparent));
+  animation: fire-flicker 1.15s ease-in-out infinite;
+}
+
+.fire-lit::before {
+  content: "";
+  position: absolute;
+  inset: -0.45rem;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--fire) 42%, transparent), transparent 68%);
+  filter: blur(3px);
+  animation: fire-glow 1.6s ease-in-out infinite;
+}
+
+.fire-lit .fire-core {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: fire-core-pulse 0.82s ease-in-out infinite;
 }
 
 .fire-dim {
   color: color-mix(in srgb, var(--muted) 55%, transparent);
   opacity: 0.45;
   filter: none;
+}
+
+@keyframes fire-flicker {
+  0%,
+  100% {
+    transform: rotate(-1deg) scale(1);
+  }
+  28% {
+    transform: rotate(1.5deg) scale(1.08, 1.13);
+  }
+  52% {
+    transform: rotate(-1.5deg) scale(0.98, 1.05);
+  }
+  76% {
+    transform: rotate(1deg) scale(1.05, 1.09);
+  }
+}
+
+@keyframes fire-glow {
+  0%,
+  100% {
+    opacity: 0.48;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.18);
+  }
+}
+
+@keyframes fire-core-pulse {
+  0%,
+  100% {
+    transform: scale(0.92, 0.9);
+    opacity: 0.82;
+  }
+  50% {
+    transform: scale(1.08, 1.14);
+    opacity: 1;
+  }
 }
 
 label {
@@ -933,6 +995,14 @@ body[data-theme="royal"] .cta-add-workout {
     background-position: 0% 50%;
     box-shadow: 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
     transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fire-lit,
+  .fire-lit::before,
+  .fire-lit .fire-core {
+    animation: none;
   }
 }
 
