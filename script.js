@@ -4,6 +4,7 @@ const THEME_KEY = "gym_tracker_theme_v1";
 const WORKOUT_DRAFT_STORAGE_PREFIX = "gym_tracker_workout_draft_v1";
 const WORKOUT_DRAFT_VERSION = 1;
 const DRAFT_SYNC_DELAY_MS = 900;
+const ENABLE_TEMPORARY_BACKDATE = true;
 const DEFAULT_PRIMARY = ["Chest", "Back", "Shoulder", "Leg"];
 const DEFAULT_SECONDARY = ["Biceps", "Triceps", "Forearms", "Calves", "Abs"];
 let draftSyncTimer = null;
@@ -1093,8 +1094,29 @@ function renderWorkout() {
       </div>
     </div>
     <form id="muscle-select-form" class="panel">
+      <section class="workout-steps" aria-labelledby="workout-steps-title">
+        <span id="workout-steps-title" class="workout-steps-label">How it works</span>
+        <ol>
+          <li><span>1</span><strong>Select muscles</strong></li>
+          <li><span>2</span><strong>Name lift &amp; choose sets</strong></li>
+          <li><span>3</span><strong>Log reps &amp; weight</strong></li>
+          <li><span>4</span><strong>Review &amp; submit</strong></li>
+        </ol>
+      </section>
       <h2>Choose Muscle to Train</h2>
-      <p><strong>Date:</strong> ${formatDate(draft.date)}</p>
+      ${
+        ENABLE_TEMPORARY_BACKDATE
+          ? `
+            <div class="temporary-backdate-note">
+              <strong>Temporary past-date entry</strong>
+              <span>Choose today or a previous workout date. Future dates are disabled.</span>
+            </div>
+            <label>Workout date
+              <input id="workout-date-input" type="date" name="workoutDate" value="${escapeHtml(draft.date)}" max="${todayIso()}" required />
+            </label>
+          `
+          : `<p><strong>Date:</strong> ${formatDate(draft.date)}</p>`
+      }
       ${renderWorkoutMuscleGroup("Primary", "Main muscle focus", primaryMuscles, draft)}
       ${renderWorkoutMuscleGroup("Secondary", "Supporting muscle focus", secondaryMuscles, draft)}
       <button type="submit">Save Muscle Groups</button>
@@ -1549,11 +1571,17 @@ function bindEvents() {
   if (muscleSelectForm) {
     muscleSelectForm.addEventListener("submit", (event) => {
       event.preventDefault();
+      const workoutDate = event.target.elements.workoutDate?.value || state.workoutDraft.date;
+      if (!workoutDate || parseIso(workoutDate) > parseIso(todayIso())) {
+        alert("Choose today or a previous date. Future workout dates are not allowed.");
+        return;
+      }
       const selected = [...event.target.querySelectorAll('input[name="muscles"]:checked')].map((input) => input.value);
       if (!selected.length) {
         alert("Select at least one muscle group.");
         return;
       }
+      state.workoutDraft.date = workoutDate;
       state.workoutDraft.muscleGroupsSnapshot = selected;
       queueWorkoutDraftSave();
       render();
@@ -1567,6 +1595,29 @@ function bindEvents() {
         queueWorkoutDraftSave();
       });
     });
+
+    const workoutDateInput = document.getElementById("workout-date-input");
+    if (workoutDateInput) {
+      workoutDateInput.addEventListener("change", (event) => {
+        const nextDate = event.target.value;
+        const previousDate = state.workoutDraft.date;
+        if (!nextDate || parseIso(nextDate) > parseIso(todayIso())) {
+          event.target.value = previousDate;
+          alert("Future workout dates are not allowed.");
+          return;
+        }
+        if (
+          nextDate !== previousDate &&
+          (state.workoutDraft.lifts.length || state.liftBuilder?.isConfigured) &&
+          !confirm(`Move this unfinished workout from ${formatDate(previousDate)} to ${formatDate(nextDate)}?`)
+        ) {
+          event.target.value = previousDate;
+          return;
+        }
+        state.workoutDraft.date = nextDate;
+        queueWorkoutDraftSave();
+      });
+    }
   }
 
   const liftConfigForm = document.getElementById("lift-config-form");

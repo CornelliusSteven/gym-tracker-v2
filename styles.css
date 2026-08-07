@@ -927,6 +927,90 @@ body[data-theme="royal"] .cta-add-workout {
   line-height: 1;
 }
 
+.workout-steps {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 94%, var(--accent) 6%);
+}
+
+.workout-steps-label {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workout-steps ol {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workout-steps li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.workout-steps li:not(:last-child)::after {
+  content: "\2192";
+  position: absolute;
+  right: -0.3rem;
+  color: color-mix(in srgb, var(--muted) 70%, transparent);
+}
+
+.workout-steps li > span {
+  display: grid;
+  flex: 0 0 1.35rem;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel) 82%);
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.workout-steps strong {
+  font-size: inherit;
+}
+
+@media (max-width: 520px) {
+  .workout-steps {
+    padding-inline: 0.6rem;
+  }
+
+  .workout-steps ol {
+    gap: 0.25rem;
+  }
+
+  .workout-steps li {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    padding-right: 0.2rem;
+    font-size: 0.64rem;
+  }
+
+  .workout-steps li:not(:last-child)::after {
+    top: 0.25rem;
+    right: -0.15rem;
+  }
+}
+
 .manual-input-field {
   padding: 0.7rem;
   border: 1px solid var(--line);
@@ -943,6 +1027,24 @@ body[data-theme="royal"] .cta-add-workout {
 .manual-input-field.is-enabled {
   border-color: color-mix(in srgb, var(--accent) 58%, var(--line) 42%);
   background: color-mix(in srgb, var(--panel) 91%, var(--accent) 9%);
+}
+
+.temporary-backdate-note {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.75rem;
+  border: 1px dashed color-mix(in srgb, var(--accent) 58%, var(--line) 42%);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 91%, var(--accent) 9%);
+}
+
+.temporary-backdate-note strong {
+  color: var(--accent);
+}
+
+.temporary-backdate-note span {
+  color: var(--muted);
+  font-size: 0.86rem;
 }
 
 .submit-workout-button:not(:disabled) {
