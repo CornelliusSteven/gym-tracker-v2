@@ -1259,8 +1259,8 @@ function renderStreak() {
         ${trackRangeButton("thisMonth", "This month")}
         ${trackRangeButton("last30", "Last 30 days")}
       </div>
-      ${renderMuscleDayChart(state.trackRange, "primary", "Primary Muscle Chart")}
-      ${renderMuscleDayChart(state.trackRange, "secondary", "Secondary Muscle Chart")}
+      ${renderMuscleBarChart(state.trackRange, "primary", "Primary Muscle Chart")}
+      ${renderMuscleBarChart(state.trackRange, "secondary", "Secondary Muscle Chart")}
     </div>
   `;
 }
@@ -1269,7 +1269,7 @@ function trackRangeButton(range, label) {
   return `<button class="track-filter ${state.trackRange === range ? "active" : ""}" data-track-range="${range}">${label}</button>`;
 }
 
-function renderMuscleDayChart(range, category, title) {
+function renderMuscleBarChart(range, category, title) {
   const rows = getMuscleDayCounts(range, category);
   if (!rows.length) {
     return `
@@ -1287,14 +1287,14 @@ function renderMuscleDayChart(range, category, title) {
         <h3>${title}</h3>
         <span>${rows.reduce((sum, row) => sum + row.count, 0)} total muscle days</span>
       </div>
-      <div class="track-chart">
+      <div class="track-chart" role="img" aria-label="${title} showing gym days trained for each muscle">
         ${rows
           .map((row) => {
             const height = maxCount > 0 && row.count > 0 ? Math.max((row.count / maxCount) * 100, 8) : 0;
             return `
               <div class="chart-column">
                 <span class="chart-value">${row.count} day${row.count === 1 ? "" : "s"}</span>
-                <div class="chart-track" aria-label="${escapeHtml(row.name)} trained ${row.count} day${row.count === 1 ? "" : "s"}">
+                <div class="chart-bar-area" aria-label="${escapeHtml(row.name)} trained ${row.count} day${row.count === 1 ? "" : "s"}">
                   <div class="chart-bar" style="height:${height}%"></div>
                 </div>
                 <strong class="chart-label">${escapeHtml(row.name)}</strong>
