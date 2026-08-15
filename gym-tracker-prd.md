@@ -1,4 +1,4 @@
-# Product Requirements Document: Gym Tracker Responsive Web App
+# Product Requirements Document: GymBoard Responsive Web App
 
 ## Product Overview
 

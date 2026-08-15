@@ -709,7 +709,7 @@ function render() {
     app.innerHTML = `
       <main class="shell auth-shell">
         <section class="auth-panel">
-          <h1>Gym Tracker</h1>
+          <h1>GymBoard</h1>
           <p>Loading your gym data...</p>
         </section>
       </main>
@@ -721,7 +721,7 @@ function render() {
     app.innerHTML = `
       <main class="shell auth-shell">
         <section class="auth-panel">
-          <h1>Gym Tracker</h1>
+          <h1>GymBoard</h1>
           <p>${escapeHtml(state.setupError)}</p>
           <p>Open <code>supabase.config.js</code>, paste your Supabase URL and anon key, then refresh.</p>
         </section>
@@ -752,8 +752,11 @@ function renderAuth() {
     <main class="shell auth-shell">
       <section class="auth-panel">
         <div class="theme-row">${renderThemePicker()}</div>
-        <h1>Gym Tracker</h1>
-        <p>Track workouts, body-part balance, and streaks.</p>
+        <div class="auth-brand">
+          <h1>GymBoard</h1>
+          <p class="brand-tagline">Every Workout. Every Set. One Board.</p>
+          <p class="brand-description">Track your workouts, sets, reps, and progress—all in one place.</p>
+        </div>
         <div class="auth-grid">
           <form id="register-form" class="panel">
             <h2>Create account</h2>
@@ -781,8 +784,9 @@ function renderAuthed() {
     <main class="shell">
       <header class="topbar">
         <div>
-          <h1>Gym Tracker</h1>
-          <p>${escapeHtml(displayName)}</p>
+          <h1>GymBoard</h1>
+          <p class="brand-tagline">Every Workout. Every Set. One Board.</p>
+          <p class="header-user-name">${escapeHtml(displayName)}</p>
           <div class="header-actions">
             ${renderThemePicker()}
             <button id="go-settings" class="ghost settings-button">Settings</button>
@@ -2010,7 +2014,7 @@ function downloadShareImage(payload) {
 
   ctx.fillStyle = theme.muted;
   ctx.font = "500 19px Arial";
-  ctx.fillText("Generated from Gym Tracker", 118, 526);
+  ctx.fillText("Generated from GymBoard", 118, 526);
 
   const link = document.createElement("a");
   link.href = canvas.toDataURL("image/png");

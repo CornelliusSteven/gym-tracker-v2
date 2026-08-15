@@ -109,6 +109,33 @@ p {
   background: var(--panel);
 }
 
+.auth-brand {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.auth-brand h1 {
+  margin-bottom: 0;
+  font-size: clamp(2rem, 5vw, 3rem);
+}
+
+.brand-tagline {
+  color: var(--ink);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.brand-description {
+  max-width: 38rem;
+  font-size: 0.92rem;
+}
+
+.header-user-name {
+  margin-top: 0.2rem;
+  font-size: 0.84rem;
+}
+
 .auth-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
