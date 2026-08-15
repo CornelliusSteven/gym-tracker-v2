@@ -629,8 +629,8 @@ function computeStreak(uniqueDatesAsc) {
   return { currentStreak: daysSinceLast >= 7 ? 0 : endingRun, longestStreak: longest };
 }
 
-function computeWeeklyStreak(uniqueDatesAsc) {
-  if (!uniqueDatesAsc.length) return 0;
+function computeWeeklyStreaks(uniqueDatesAsc) {
+  if (!uniqueDatesAsc.length) return { weeklyStreak: 0, longestWeeklyStreak: 0 };
 
   const activeWeekKeys = new Set(
     uniqueDatesAsc.map((iso) => toIso(weekStartMonday(parseIso(iso))))
@@ -638,19 +638,22 @@ function computeWeeklyStreak(uniqueDatesAsc) {
   const sortedWeekKeys = [...activeWeekKeys].sort();
 
   let run = 1;
-  let endingRun = 1;
+  let longest = 1;
   for (let i = 1; i < sortedWeekKeys.length; i += 1) {
     const prev = parseIso(sortedWeekKeys[i - 1]);
     const cur = parseIso(sortedWeekKeys[i]);
     const gap = Math.floor((cur - prev) / 86400000);
     run = gap === 7 ? run + 1 : 1;
-    if (i === sortedWeekKeys.length - 1) endingRun = run;
+    if (run > longest) longest = run;
   }
 
   const latestWeek = parseIso(sortedWeekKeys[sortedWeekKeys.length - 1]);
   const currentWeek = weekStartMonday(parseIso(todayIso()));
   const gapFromCurrent = Math.floor((currentWeek - latestWeek) / 86400000);
-  return gapFromCurrent > 7 ? 0 : endingRun;
+  return {
+    weeklyStreak: gapFromCurrent > 7 ? 0 : run,
+    longestWeeklyStreak: longest,
+  };
 }
 
 function computeAnalytics() {
@@ -692,7 +695,7 @@ function computeAnalytics() {
     xp,
     level: Math.floor(xp / 100) + 1,
     xpIntoLevel: xp % 100,
-    weeklyStreak: computeWeeklyStreak(uniqueDates),
+    ...computeWeeklyStreaks(uniqueDates),
     ...computeStreak(uniqueDates),
   };
 }
@@ -846,7 +849,11 @@ function renderDashboard(analytics) {
     <div class="metrics">
       ${streakMetric("Current Streak", `${analytics.currentStreak} gym days`, analytics.currentStreak > 0)}
       ${streakMetric("Longest Streak", `${analytics.longestStreak} gym days`, analytics.longestStreak > 0)}
-      ${metric("Gym Days Last 30 Days", analytics.last30GymDays)}
+      ${streakMetric(
+        "Longest Weekly Streak",
+        `${analytics.longestWeeklyStreak} week${analytics.longestWeeklyStreak === 1 ? "" : "s"}`,
+        analytics.longestWeeklyStreak > 0
+      )}
       ${metric("Gym Days This Month", analytics.monthGymDays)}
     </div>
     <div class="dashboard-cta-row">
