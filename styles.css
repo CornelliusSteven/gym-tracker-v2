@@ -767,29 +767,98 @@ select[multiple] {
 .share-card {
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 1rem;
+  padding: clamp(1rem, 3vw, 2rem);
   background: linear-gradient(135deg, color-mix(in srgb, var(--panel) 80%, var(--accent) 20%), var(--panel));
   display: grid;
-  gap: 0.9rem;
+  gap: 1rem;
 }
 
-.share-grid {
+.share-card-header {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.share-card-header h3 {
+  margin: 0;
+  font-size: clamp(1.45rem, 3vw, 2rem);
+}
+
+.share-card-header p {
+  color: var(--ink);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(1rem, 2.2vw, 1.35rem);
+}
+
+.share-card-level {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.65rem;
+}
+
+.share-card-level strong {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(1.25rem, 2.5vw, 1.65rem);
+}
+
+.share-card-level span {
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: right;
+}
+
+.share-card-progress {
+  height: 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 72%, var(--line) 28%);
+  overflow: hidden;
+}
+
+.share-card-progress div {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+
+.share-stat-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.7rem;
+  gap: 0.8rem;
+  margin-top: 0.6rem;
 }
 
-.share-grid div {
+.share-stat-panel {
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 0.65rem;
+  border-radius: 14px;
+  padding: clamp(0.85rem, 2vw, 1.2rem);
   display: grid;
-  gap: 0.25rem;
+  gap: 1rem;
   background: color-mix(in srgb, var(--panel) 86%, var(--line) 14%);
 }
 
-.share-grid strong {
-  font-size: 0.85rem;
+.share-stat-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.8rem;
+}
+
+.share-stat-row strong {
+  font-size: 0.9rem;
+}
+
+.share-stat-row span {
+  max-width: 12rem;
+  color: var(--ink);
+  font-weight: 700;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.share-card footer {
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .gym-day {
@@ -1276,7 +1345,7 @@ body[data-theme="royal"] .cta-add-workout {
   .game-grid {
     grid-template-columns: 1fr;
   }
-  .share-grid {
+  .share-stat-columns {
     grid-template-columns: 1fr;
   }
   .tabs {
