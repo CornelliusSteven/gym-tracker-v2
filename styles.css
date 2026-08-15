@@ -524,6 +524,27 @@ select[multiple] {
   min-width: 0;
 }
 
+.chart-column-button {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0.25rem;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.chart-column-button:hover,
+.chart-column-button:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--line) 48%);
+  background: color-mix(in srgb, var(--panel) 84%, var(--accent) 16%);
+  transform: translateY(-2px);
+}
+
+.chart-column-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .chart-value {
   color: var(--muted);
   font-size: 0.82rem;
@@ -559,6 +580,104 @@ select[multiple] {
 .analytics-chart-section.secondary .chart-bar {
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent-2) 72%, white 28%), var(--accent-2));
   box-shadow: 0 0 14px color-mix(in srgb, var(--accent-2) 24%, transparent);
+}
+
+.muscle-analytics-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.muscle-detail-hero {
+  gap: 1.1rem;
+}
+
+.muscle-category-badge {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 58%, var(--line) 42%);
+  border-radius: 999px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--panel) 88%, var(--accent) 12%);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.muscle-total-range-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.muscle-total-range-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--panel) 82%, var(--accent) 18%), var(--card-bg));
+}
+
+.muscle-total-range-card > span {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.muscle-total-range-card > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.muscle-total-range-card strong {
+  color: var(--ink);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+}
+
+.muscle-total-range-card small {
+  color: var(--muted);
+}
+
+.latest-muscle-workout {
+  gap: 1rem;
+}
+
+.latest-muscle-date {
+  color: var(--accent);
+  font-size: 0.9rem;
+  text-align: right;
+}
+
+.latest-muscle-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.latest-muscle-summary span {
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--panel) 84%, var(--accent) 16%);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.latest-session-muscles {
+  font-size: 0.88rem;
+}
+
+.muscle-lift-detail {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 90%, var(--card-bg) 10%);
 }
 
 .calendar-grid {
@@ -1346,6 +1465,9 @@ body[data-theme="royal"] .cta-add-workout {
     grid-template-columns: 1fr;
   }
   .share-stat-columns {
+    grid-template-columns: 1fr;
+  }
+  .muscle-total-range-grid {
     grid-template-columns: 1fr;
   }
   .tabs {

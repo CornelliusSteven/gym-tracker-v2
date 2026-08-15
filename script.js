@@ -24,6 +24,7 @@ const state = {
   liftBuilder: null,
   selectedCalendarDate: null,
   trackRange: "allTime",
+  selectedAnalyticsMuscle: null,
   loading: true,
   busy: false,
   setupError: "",
@@ -73,6 +74,7 @@ async function init() {
     lastServerDraftSavedAt = null;
     state.draftBackendAvailable = true;
     state.selectedCalendarDate = null;
+    state.selectedAnalyticsMuscle = null;
     if (state.authUser) {
       await hydrateUserData();
       await restoreWorkoutDraft();
@@ -808,7 +810,8 @@ function renderAuthed() {
 }
 
 function tab(id, label) {
-  return `<button class="tab ${state.currentView === id ? "active" : ""}" data-tab="${id}">${label}</button>`;
+  const isActive = state.currentView === id || (id === "streak" && state.currentView === "muscleAnalyticsDetail");
+  return `<button class="tab ${isActive ? "active" : ""}" data-tab="${id}">${label}</button>`;
 }
 
 function renderView(analytics) {
@@ -816,6 +819,7 @@ function renderView(analytics) {
   if (state.currentView === "workout") return renderWorkout();
   if (state.currentView === "calendarDay") return renderCalendarDayPage();
   if (state.currentView === "streak") return renderStreak(analytics);
+  if (state.currentView === "muscleAnalyticsDetail") return renderMuscleAnalyticsDetail();
   if (state.currentView === "settings") return renderSettings();
   return renderMuscles();
 }
@@ -1280,7 +1284,7 @@ function renderStreak() {
     <div class="panel track-panel">
       <div>
         <h2>Analytics</h2>
-        <p>See how many different gym days each muscle has been trained.</p>
+        <p>See how many gym days each muscle has been trained, then select a bar to view sets, reps, and the latest workout.</p>
       </div>
       <div class="track-filter-row" aria-label="Analytics time filter">
         ${trackRangeButton("allTime", "All time")}
@@ -1315,18 +1319,24 @@ function renderMuscleBarChart(range, category, title) {
         <h3>${title}</h3>
         <span>${rows.reduce((sum, row) => sum + row.count, 0)} total muscle days</span>
       </div>
-      <div class="track-chart" role="img" aria-label="${title} showing gym days trained for each muscle">
+      <div class="track-chart" aria-label="${title} showing gym days trained for each muscle">
         ${rows
           .map((row) => {
             const height = maxCount > 0 && row.count > 0 ? Math.max((row.count / maxCount) * 100, 8) : 0;
             return `
-              <div class="chart-column">
+              <button
+                class="chart-column chart-column-button"
+                type="button"
+                data-muscle-detail="${escapeHtml(row.name)}"
+                data-muscle-category="${category}"
+                aria-label="View ${escapeHtml(row.name)} analytics details"
+              >
                 <span class="chart-value">${row.count} day${row.count === 1 ? "" : "s"}</span>
-                <div class="chart-bar-area" aria-label="${escapeHtml(row.name)} trained ${row.count} day${row.count === 1 ? "" : "s"}">
-                  <div class="chart-bar" style="height:${height}%"></div>
-                </div>
+                <span class="chart-bar-area" aria-hidden="true">
+                  <span class="chart-bar" style="height:${height}%"></span>
+                </span>
                 <strong class="chart-label">${escapeHtml(row.name)}</strong>
-              </div>
+              </button>
             `;
           })
           .join("")}
@@ -1361,6 +1371,148 @@ function getMuscleDayCounts(range, category) {
   return getMusclesByCategory(category)
     .map((muscle) => ({ name: muscle.name, count: muscleDays.get(muscle.name)?.size || 0 }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+function getSessionsForMuscle(muscleName) {
+  const normalizedMuscle = String(muscleName || "").trim().toLowerCase();
+  return state.sessions
+    .filter((session) =>
+      (session.muscleGroupsSnapshot || []).some(
+        (name) => String(name || "").trim().toLowerCase() === normalizedMuscle
+      )
+    )
+    .sort((a, b) => {
+      const dateOrder = String(b.date).localeCompare(String(a.date));
+      if (dateOrder !== 0) return dateOrder;
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
+}
+
+function getTrainingTotals(sessions) {
+  return sessions.reduce(
+    (totals, session) => {
+      (session.lifts || []).forEach((lift) => {
+        const sets = lift.sets || [];
+        totals.sets += sets.length;
+        totals.reps += sets.reduce((sum, set) => sum + (Number(set.reps) || 0), 0);
+      });
+      return totals;
+    },
+    { sets: 0, reps: 0 }
+  );
+}
+
+function renderMuscleAnalyticsDetail() {
+  const selection = state.selectedAnalyticsMuscle;
+  if (!selection?.name) {
+    return `
+      <div class="panel muscle-analytics-page">
+        <button id="back-analytics" class="back-button" type="button"><span aria-hidden="true">&larr;</span>Back to Analytics</button>
+        <p>Select a muscle bar from Analytics to view its details.</p>
+      </div>
+    `;
+  }
+
+  const allSessions = getSessionsForMuscle(selection.name);
+  const today = parseIso(todayIso());
+  const last30Start = new Date(today);
+  last30Start.setDate(today.getDate() - 29);
+  const last30Sessions = allSessions.filter((session) => {
+    const date = parseIso(session.date);
+    return date >= last30Start && date <= today;
+  });
+  const last30Totals = getTrainingTotals(last30Sessions);
+  const allTimeTotals = getTrainingTotals(allSessions);
+  const latestSession = allSessions[0] || null;
+  const categoryLabel = selection.category === "secondary" ? "Secondary muscle" : "Primary muscle";
+
+  return `
+    <div class="muscle-analytics-page">
+      <section class="panel muscle-detail-hero">
+        <div class="page-top-row">
+          <button id="back-analytics" class="back-button" type="button"><span aria-hidden="true">&larr;</span>Back to Analytics</button>
+          <span class="muscle-category-badge">${categoryLabel}</span>
+        </div>
+        <div>
+          <h2>${escapeHtml(selection.name)} Training Detail</h2>
+          <p>Total sets and reps from workout sessions tagged with ${escapeHtml(selection.name)}.</p>
+        </div>
+        <div class="muscle-total-range-grid">
+          ${renderMuscleTotalRange("Last 30 Days", last30Totals)}
+          ${renderMuscleTotalRange("All Time", allTimeTotals)}
+        </div>
+      </section>
+      <section class="panel latest-muscle-workout">
+        <div class="analytics-chart-heading">
+          <div>
+            <h3>Latest ${escapeHtml(selection.name)} Workout</h3>
+            <p>Only the most recent workout tagged with this muscle is shown.</p>
+          </div>
+          ${latestSession ? `<strong class="latest-muscle-date">${formatDate(latestSession.date)}</strong>` : ""}
+        </div>
+        ${latestSession ? renderLatestMuscleSession(latestSession) : `<p>No workout has been recorded for this muscle yet.</p>`}
+      </section>
+    </div>
+  `;
+}
+
+function renderMuscleTotalRange(label, totals) {
+  return `
+    <article class="muscle-total-range-card">
+      <span>${label}</span>
+      <div>
+        <strong>${totals.sets}</strong>
+        <small>Total sets</small>
+      </div>
+      <div>
+        <strong>${totals.reps}</strong>
+        <small>Total reps</small>
+      </div>
+    </article>
+  `;
+}
+
+function renderLatestMuscleSession(session) {
+  const lifts = session.lifts || [];
+  const totals = getTrainingTotals([session]);
+  return `
+    <div class="latest-muscle-summary">
+      <span>${lifts.length} lift${lifts.length === 1 ? "" : "s"}</span>
+      <span>${totals.sets} set${totals.sets === 1 ? "" : "s"}</span>
+      <span>${totals.reps} rep${totals.reps === 1 ? "" : "s"}</span>
+    </div>
+    <p class="latest-session-muscles">Session muscles: ${(session.muscleGroupsSnapshot || []).map(escapeHtml).join(", ")}</p>
+    ${
+      lifts.length
+        ? lifts
+            .map((lift, liftIndex) => {
+              const sets = lift.sets || [];
+              return `
+                <article class="muscle-lift-detail">
+                  <div class="session-detail-heading">
+                    <strong>Lift ${liftIndex + 1}: ${escapeHtml(lift.name)}</strong>
+                    <span>${sets.length} set${sets.length === 1 ? "" : "s"} · ${escapeHtml(lift.unit)}</span>
+                  </div>
+                  <div class="set-detail-grid">
+                    ${sets
+                      .map(
+                        (set, setIndex) => `
+                          <div>
+                            <strong>Set ${set.setNumber || setIndex + 1}</strong>
+                            <span>${Number(set.reps) || 0} reps</span>
+                            <span>${Number(set.weight) || 0} ${escapeHtml(lift.unit)}</span>
+                          </div>
+                        `
+                      )
+                      .join("")}
+                  </div>
+                </article>
+              `;
+            })
+            .join("")
+        : `<p>No lift details were saved in this workout.</p>`
+    }
+  `;
 }
 
 function renderSummary(mapObj) {
@@ -1541,6 +1693,26 @@ function bindEvents() {
       render();
     });
   });
+
+  document.querySelectorAll("[data-muscle-detail]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedAnalyticsMuscle = {
+        name: button.dataset.muscleDetail,
+        category: button.dataset.muscleCategory,
+      };
+      state.currentView = "muscleAnalyticsDetail";
+      if (state.workoutDraft) queueWorkoutDraftSave();
+      render();
+    });
+  });
+
+  const backAnalytics = document.getElementById("back-analytics");
+  if (backAnalytics) {
+    backAnalytics.addEventListener("click", () => {
+      state.currentView = "streak";
+      render();
+    });
+  }
 
   const goWorkout = document.getElementById("go-workout");
   if (goWorkout) {
