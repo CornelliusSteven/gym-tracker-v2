@@ -1995,15 +1995,21 @@ function downloadShareImage(payload) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  ctx.fillStyle = theme.bg;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const cardGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  cardGradient.addColorStop(0, theme.gradientStart);
+  cardGradient.addColorStop(0.52, theme.panel);
+  cardGradient.addColorStop(1, theme.gradientEnd);
 
-  ctx.fillStyle = theme.panel;
-  roundRect(ctx, 78, 66, 1044, 496, 18);
-  ctx.fill();
+  ctx.save();
+  roundRect(ctx, 3, 3, canvas.width - 6, canvas.height - 6, 24);
+  ctx.clip();
+  ctx.fillStyle = cardGradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+
   ctx.strokeStyle = theme.accent;
-  ctx.lineWidth = 3;
-  roundRect(ctx, 78, 66, 1044, 496, 18);
+  ctx.lineWidth = 6;
+  roundRect(ctx, 3, 3, canvas.width - 6, canvas.height - 6, 24);
   ctx.stroke();
 
   ctx.fillStyle = theme.ink;
@@ -2080,6 +2086,8 @@ function getCanvasTheme() {
     dark: {
       bg: "#111315",
       panel: "#1a1d20",
+      gradientStart: "#332817",
+      gradientEnd: "#22272c",
       card: "#252a2f",
       ink: "#f2f3f5",
       muted: "#a8afb7",
@@ -2089,6 +2097,8 @@ function getCanvasTheme() {
     pastel: {
       bg: "#ffeef4",
       panel: "#fff7fb",
+      gradientStart: "#f8d8e5",
+      gradientEnd: "#fbe5ee",
       card: "#fbe5ee",
       ink: "#5a2c42",
       muted: "#8e5f78",
@@ -2098,6 +2108,8 @@ function getCanvasTheme() {
     royal: {
       bg: "#1f1730",
       panel: "#2d203b",
+      gradientStart: "#47255c",
+      gradientEnd: "#352345",
       card: "#3c2b4d",
       ink: "#f3e8d6",
       muted: "#cdbda6",
