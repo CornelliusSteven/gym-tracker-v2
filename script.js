@@ -842,7 +842,7 @@ function renderAuthed() {
       <nav class="tabs">
         ${tab("dashboard", "Dashboard")}
         ${tab("streak", "Analytics")}
-        ${tab("muscles", "Muscle Groups")}
+        ${tab("muscles", "Add Muscle Group")}
       </nav>
       <section class="content">${renderView(analytics)}</section>
     </main>
@@ -1217,17 +1217,21 @@ function renderWorkout() {
             <h2>Lift Setup</h2>
             <p class="hint">Assign every lift to one selected muscle so Analytics can count its sets and reps correctly.</p>
             <label>Name of lifts<input type="text" name="liftName" value="${escapeHtml(builder.liftName)}" required /></label>
-            <label>Muscle trained
-              <select name="liftMuscle" required>
-                <option value="">Choose a selected muscle...</option>
+            <fieldset class="lift-muscle-picker">
+              <legend>Muscle trained</legend>
+              <div class="lift-muscle-options">
                 ${draft.muscleGroupsSnapshot
                   .map(
-                    (muscle) =>
-                      `<option value="${escapeHtml(muscle)}" ${builderMuscleIsValid && builder.muscleGroup === muscle ? "selected" : ""}>${escapeHtml(muscle)}</option>`
+                    (muscle, index) => `
+                      <label class="lift-muscle-option" for="lift_muscle_${index}">
+                        <input id="lift_muscle_${index}" type="radio" name="liftMuscle" value="${escapeHtml(muscle)}" ${builderMuscleIsValid && builder.muscleGroup === muscle ? "checked" : ""} required />
+                        <span>${escapeHtml(muscle)}</span>
+                      </label>
+                    `
                   )
                   .join("")}
-              </select>
-            </label>
+              </div>
+            </fieldset>
             <label>How many sets
               <select id="sets-count-select" name="setsCount" required>
                 ${Array.from({ length: 10 }, (_, index) => index + 1)
@@ -1636,6 +1640,7 @@ function renderMuscles() {
     </div>
     <form id="muscle-add-form" class="panel">
       <h2>Add Muscle Group</h2>
+      <p class="muscle-add-description">Add muscle groups here so they appear as selectable options whenever you log a workout session.</p>
       <label>Muscle name<input type="text" name="muscleName" required /></label>
       <label>Category
         <select name="muscleCategory" required>
@@ -2007,9 +2012,11 @@ function bindEvents() {
       queueWorkoutDraftSave();
     });
 
-    liftConfigForm.elements.liftMuscle.addEventListener("change", (event) => {
-      state.liftBuilder.muscleGroup = event.target.value;
-      queueWorkoutDraftSave();
+    liftConfigForm.querySelectorAll('input[name="liftMuscle"]').forEach((input) => {
+      input.addEventListener("change", (event) => {
+        state.liftBuilder.muscleGroup = event.target.value;
+        queueWorkoutDraftSave();
+      });
     });
 
     liftConfigForm.elements.unit.addEventListener("change", (event) => {
