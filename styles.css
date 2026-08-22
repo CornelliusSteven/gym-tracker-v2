@@ -425,6 +425,40 @@ select[multiple] {
   gap: 0.4rem;
 }
 
+.submitted-workouts-page,
+.submitted-workout-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.submitted-workouts-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  align-items: end;
+  gap: 1rem;
+}
+
+.submitted-workout-item {
+  gap: 0.35rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 88%, var(--card-bg) 12%);
+}
+
+.submitted-workout-item:first-of-type {
+  padding-top: 0.85rem;
+}
+
+.submitted-workout-actions {
+  display: flex;
+  margin-top: 0.35rem;
+}
+
+.submitted-workout-actions button {
+  width: auto;
+}
+
 .hint {
   font-size: 0.88rem;
 }
@@ -1247,6 +1281,54 @@ body[data-theme="royal"] .cta-add-workout {
   max-width: 9rem;
 }
 
+.workout-date-picker {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 92%, var(--accent) 8%);
+}
+
+.workout-date-picker > div:first-child {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.workout-date-picker > div:first-child span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.workout-date-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.workout-date-option {
+  display: grid;
+  justify-items: start;
+  gap: 0.15rem;
+  text-align: left;
+}
+
+.workout-date-option span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.workout-date-option.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--control-bg) 72%, var(--accent) 28%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.workout-date-option.active span {
+  color: var(--ink);
+}
+
 @media (max-width: 520px) {
   .workout-steps {
     gap: 0.45rem;
@@ -1279,6 +1361,10 @@ body[data-theme="royal"] .cta-add-workout {
     box-shadow: 0 0 0 3px var(--panel);
     font-size: 0.68rem;
   }
+
+  .workout-date-options {
+    grid-template-columns: 1fr;
+  }
 }
 
 .manual-input-field {
@@ -1299,24 +1385,6 @@ body[data-theme="royal"] .cta-add-workout {
   background: color-mix(in srgb, var(--panel) 91%, var(--accent) 9%);
 }
 
-.temporary-backdate-note {
-  display: grid;
-  gap: 0.2rem;
-  padding: 0.75rem;
-  border: 1px dashed color-mix(in srgb, var(--accent) 58%, var(--line) 42%);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 91%, var(--accent) 9%);
-}
-
-.temporary-backdate-note strong {
-  color: var(--accent);
-}
-
-.temporary-backdate-note span {
-  color: var(--muted);
-  font-size: 0.86rem;
-}
-
 .submit-workout-button:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent-2) 78%, var(--line) 22%);
   background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 82%, var(--panel) 18%), var(--accent-2));
@@ -1332,6 +1400,25 @@ body[data-theme="royal"] .cta-add-workout {
   color: var(--accent-2);
   font-size: 0.88rem;
   font-weight: 700;
+}
+
+.lift-muscle-assignment {
+  color: var(--accent-2);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.lift-muscle-assignment.unassigned,
+.assignment-warning {
+  color: var(--danger);
+  font-size: 0.84rem;
+}
+
+.analytics-data-note {
+  padding-left: 0.65rem;
+  border-left: 2px solid var(--accent);
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .workout-muscle-section {
@@ -1476,6 +1563,10 @@ body[data-theme="royal"] .cta-add-workout {
 }
 
 @media (max-width: 560px) {
+  .submitted-workouts-heading {
+    grid-template-columns: 1fr;
+  }
+
   .workout-resume-card {
     grid-template-columns: 1fr;
   }

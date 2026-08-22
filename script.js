@@ -4,7 +4,6 @@ const THEME_KEY = "gym_tracker_theme_v1";
 const WORKOUT_DRAFT_STORAGE_PREFIX = "gym_tracker_workout_draft_v1";
 const WORKOUT_DRAFT_VERSION = 1;
 const DRAFT_SYNC_DELAY_MS = 900;
-const ENABLE_TEMPORARY_BACKDATE = true;
 const DEFAULT_PRIMARY = ["Chest", "Back", "Shoulder", "Leg"];
 const DEFAULT_SECONDARY = ["Biceps", "Triceps", "Forearms", "Calves", "Abs"];
 let draftSyncTimer = null;
@@ -25,6 +24,7 @@ const state = {
   selectedCalendarDate: null,
   trackRange: "allTime",
   selectedAnalyticsMuscle: null,
+  submittedWorkoutFilter: "last20",
   loading: true,
   busy: false,
   setupError: "",
@@ -75,6 +75,7 @@ async function init() {
     state.draftBackendAvailable = true;
     state.selectedCalendarDate = null;
     state.selectedAnalyticsMuscle = null;
+    state.submittedWorkoutFilter = "last20";
     if (state.authUser) {
       await hydrateUserData();
       await restoreWorkoutDraft();
@@ -202,6 +203,7 @@ async function loadSessions() {
 function createLiftBuilder(overrides = {}) {
   return {
     liftName: "",
+    muscleGroup: "",
     setsCount: 1,
     unit: "kg",
     currentSet: 1,
@@ -220,6 +222,7 @@ function normalizeLiftBuilder(raw) {
   builder.setsCount = Math.max(1, Number.parseInt(builder.setsCount, 10) || 1);
   builder.currentSet = Math.min(builder.setsCount, Math.max(1, Number.parseInt(builder.currentSet, 10) || 1));
   builder.sets = Array.isArray(builder.sets) ? builder.sets : [];
+  builder.muscleGroup = typeof builder.muscleGroup === "string" ? builder.muscleGroup : "";
   builder.unit = builder.unit === "lbs" ? "lbs" : "kg";
   builder.pendingRepsChoice =
     builder.pendingRepsChoice === "custom" ||
@@ -234,10 +237,16 @@ function normalizeLiftBuilder(raw) {
 
 function normalizeWorkoutDraft(raw) {
   if (!raw || typeof raw !== "object" || typeof raw.date !== "string") return null;
+  const normalizedDate = [todayIso(), yesterdayIso()].includes(raw.date) ? raw.date : todayIso();
   return {
-    date: raw.date,
+    date: normalizedDate,
     muscleGroupsSnapshot: Array.isArray(raw.muscleGroupsSnapshot) ? raw.muscleGroupsSnapshot : [],
-    lifts: Array.isArray(raw.lifts) ? raw.lifts : [],
+    lifts: Array.isArray(raw.lifts)
+      ? raw.lifts.map((lift) => ({
+          ...lift,
+          muscleGroup: typeof lift?.muscleGroup === "string" ? lift.muscleGroup : "",
+        }))
+      : [],
   };
 }
 
@@ -288,7 +297,7 @@ function activeDraftRecord(savedAt = state.draftUpdatedAt || new Date().toISOStr
     savedAt,
     discarded: false,
     draftId: state.draftId,
-    currentView: state.currentView === "workout" ? "workout" : "dashboard",
+    currentView: ["workout", "submittedWorkouts"].includes(state.currentView) ? "workout" : "dashboard",
     workoutDraft: state.workoutDraft,
     liftBuilder: normalizeLiftBuilder(state.liftBuilder),
   };
@@ -561,6 +570,12 @@ function todayIso() {
   return `${y}-${m}-${day}`;
 }
 
+function yesterdayIso() {
+  const yesterday = parseIso(todayIso());
+  yesterday.setDate(yesterday.getDate() - 1);
+  return toIso(yesterday);
+}
+
 function parseIso(iso) {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d);
@@ -601,6 +616,31 @@ function escapeHtml(text) {
 
 function getMusclesByCategory(category) {
   return state.muscles.filter((row) => row.category === category);
+}
+
+function normalizeMuscleName(name) {
+  return String(name || "").trim().toLowerCase();
+}
+
+function getSessionTrainedMuscles(session) {
+  const assignedMuscles = (session.lifts || [])
+    .map((lift) => String(lift?.muscleGroup || "").trim())
+    .filter(Boolean);
+  const source = assignedMuscles.length ? assignedMuscles : session.muscleGroupsSnapshot || [];
+  return [...new Set(source)];
+}
+
+function getSessionLiftsForMuscle(session, muscleName) {
+  const target = normalizeMuscleName(muscleName);
+  const lifts = session.lifts || [];
+  const hasAssignments = lifts.some((lift) => normalizeMuscleName(lift?.muscleGroup));
+
+  if (hasAssignments) {
+    return lifts.filter((lift) => normalizeMuscleName(lift?.muscleGroup) === target);
+  }
+
+  const legacyMuscles = [...new Set((session.muscleGroupsSnapshot || []).map(normalizeMuscleName).filter(Boolean))];
+  return legacyMuscles.length === 1 && legacyMuscles[0] === target ? lifts : [];
 }
 
 function computeStreak(uniqueDatesAsc) {
@@ -675,13 +715,13 @@ function computeAnalytics() {
     const date = parseIso(session.date);
     if (date >= last30Start && date <= today) {
       last30Days.add(session.date);
-      session.muscleGroupsSnapshot.forEach((name) => {
+      getSessionTrainedMuscles(session).forEach((name) => {
         last30Muscles[name] = (last30Muscles[name] || 0) + 1;
       });
     }
     if (date.getMonth() === month && date.getFullYear() === year) {
       monthDays.add(session.date);
-      session.muscleGroupsSnapshot.forEach((name) => {
+      getSessionTrainedMuscles(session).forEach((name) => {
         monthMuscles[name] = (monthMuscles[name] || 0) + 1;
       });
     }
@@ -817,6 +857,7 @@ function tab(id, label) {
 function renderView(analytics) {
   if (state.currentView === "dashboard") return renderDashboard(analytics);
   if (state.currentView === "workout") return renderWorkout();
+  if (state.currentView === "submittedWorkouts") return renderSubmittedWorkoutsPage();
   if (state.currentView === "calendarDay") return renderCalendarDayPage();
   if (state.currentView === "streak") return renderStreak(analytics);
   if (state.currentView === "muscleAnalyticsDetail") return renderMuscleAnalyticsDetail();
@@ -976,7 +1017,7 @@ function renderMonthlyCalendar(sessions) {
         const trainedPrimaryMuscles = [
           ...new Set(
             daySessions.flatMap((session) =>
-              (session.muscleGroupsSnapshot || []).filter((name) => primaryNames.has(name))
+              getSessionTrainedMuscles(session).filter((name) => primaryNames.has(name))
             )
           ),
         ];
@@ -995,7 +1036,7 @@ function renderMonthlyCalendar(sessions) {
 function renderCalendarDayPage() {
   const selectedDate = state.selectedCalendarDate || todayIso();
   const daySessions = state.sessions.filter((session) => session.date === selectedDate);
-  const muscleGroups = [...new Set(daySessions.flatMap((session) => session.muscleGroupsSnapshot || []))];
+  const muscleGroups = [...new Set(daySessions.flatMap((session) => getSessionTrainedMuscles(session)))];
   const lifts = daySessions.flatMap((session) => session.lifts || []);
   const totalSets = lifts.reduce((sum, lift) => sum + (lift.sets?.length || 0), 0);
   const totalReps = lifts.reduce(
@@ -1044,7 +1085,7 @@ function renderCalendarDayPage() {
                 <strong>Workout Session ${sessionIndex + 1}</strong>
                 <span>${session.createdAt ? new Date(session.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Saved session"}</span>
               </div>
-              <span>Muscle groups: ${session.muscleGroupsSnapshot.map(escapeHtml).join(", ")}</span>
+              <span>Muscle groups: ${getSessionTrainedMuscles(session).map(escapeHtml).join(", ")}</span>
               ${session.lifts
                 .map(
                   (lift, liftIndex) => `
@@ -1083,7 +1124,7 @@ function renderSessions(sessions) {
       (session) => `
         <div class="list-item">
           <strong>${formatDate(session.date)}</strong>
-          <span>${session.muscleGroupsSnapshot.join(", ")}</span>
+          <span>${getSessionTrainedMuscles(session).map(escapeHtml).join(", ")}</span>
           <span>${session.lifts.length} lifts</span>
         </div>
       `
@@ -1103,6 +1144,11 @@ function ensureWorkoutState() {
   if (!state.liftBuilder) {
     state.liftBuilder = createLiftBuilder();
   }
+
+  const allowedDates = [todayIso(), yesterdayIso()];
+  if (!allowedDates.includes(state.workoutDraft.date)) {
+    state.workoutDraft.date = todayIso();
+  }
 }
 
 function renderWorkout() {
@@ -1111,6 +1157,12 @@ function renderWorkout() {
   const secondaryMuscles = getMusclesByCategory("secondary");
   const draft = state.workoutDraft;
   const builder = state.liftBuilder;
+  const today = todayIso();
+  const yesterday = yesterdayIso();
+  const builderMuscleIsValid = draft.muscleGroupsSnapshot.includes(builder.muscleGroup);
+  const hasUnassignedLifts = draft.lifts.some(
+    (lift) => !lift.muscleGroup || !draft.muscleGroupsSnapshot.includes(lift.muscleGroup)
+  );
   const usesCustomSetCount = builder.setsCount > 10;
   const usesCustomReps = builder.pendingRepsChoice === "custom";
 
@@ -1120,6 +1172,7 @@ function renderWorkout() {
         <span aria-hidden="true">&larr;</span>
         Back
       </button>
+      <button id="go-submitted-workouts" class="ghost" type="button">Submitted Workouts</button>
       <div class="draft-save-controls">
         <span id="draft-save-status" class="draft-save-status ${state.draftStatus}">${draftStatusLabel()}</span>
         <button class="danger compact-button" type="button" data-discard-workout>Discard</button>
@@ -1130,25 +1183,29 @@ function renderWorkout() {
         <span id="workout-steps-title" class="workout-steps-label">How it works</span>
         <ol>
           <li><span>1</span><strong>Select muscles</strong></li>
-          <li><span>2</span><strong>Name lift &amp; choose sets</strong></li>
+          <li><span>2</span><strong>Assign muscle &amp; set up lift</strong></li>
           <li><span>3</span><strong>Log reps &amp; weight</strong></li>
           <li><span>4</span><strong>Review &amp; submit</strong></li>
         </ol>
       </section>
       <h2>Choose Muscle to Train</h2>
-      ${
-        ENABLE_TEMPORARY_BACKDATE
-          ? `
-            <div class="temporary-backdate-note">
-              <strong>Temporary past-date entry</strong>
-              <span>Choose today or a previous workout date. Future dates are disabled.</span>
-            </div>
-            <label>Workout date
-              <input id="workout-date-input" type="date" name="workoutDate" value="${escapeHtml(draft.date)}" max="${todayIso()}" required />
-            </label>
-          `
-          : `<p><strong>Date:</strong> ${formatDate(draft.date)}</p>`
-      }
+      <div class="workout-date-picker">
+        <div>
+          <strong>Workout date</strong>
+          <span>Choose Today or Yesterday only.</span>
+        </div>
+        <div class="workout-date-options" role="group" aria-label="Workout date">
+          <button class="workout-date-option ${draft.date === today ? "active" : ""}" type="button" data-workout-date-option="${today}" aria-pressed="${draft.date === today}">
+            <strong>Today</strong>
+            <span>${formatDate(today)}</span>
+          </button>
+          <button class="workout-date-option ${draft.date === yesterday ? "active" : ""}" type="button" data-workout-date-option="${yesterday}" aria-pressed="${draft.date === yesterday}">
+            <strong>Yesterday</strong>
+            <span>${formatDate(yesterday)}</span>
+          </button>
+        </div>
+        <input type="hidden" name="workoutDate" value="${escapeHtml(draft.date)}" />
+      </div>
       ${renderWorkoutMuscleGroup("Primary", "Main muscle focus", primaryMuscles, draft)}
       ${renderWorkoutMuscleGroup("Secondary", "Supporting muscle focus", secondaryMuscles, draft)}
       <button type="submit">Save Muscle Groups</button>
@@ -1158,7 +1215,19 @@ function renderWorkout() {
         ? `
           <form id="lift-config-form" class="panel">
             <h2>Lift Setup</h2>
+            <p class="hint">Assign every lift to one selected muscle so Analytics can count its sets and reps correctly.</p>
             <label>Name of lifts<input type="text" name="liftName" value="${escapeHtml(builder.liftName)}" required /></label>
+            <label>Muscle trained
+              <select name="liftMuscle" required>
+                <option value="">Choose a selected muscle...</option>
+                ${draft.muscleGroupsSnapshot
+                  .map(
+                    (muscle) =>
+                      `<option value="${escapeHtml(muscle)}" ${builderMuscleIsValid && builder.muscleGroup === muscle ? "selected" : ""}>${escapeHtml(muscle)}</option>`
+                  )
+                  .join("")}
+              </select>
+            </label>
             <label>How many sets
               <select id="sets-count-select" name="setsCount" required>
                 ${Array.from({ length: 10 }, (_, index) => index + 1)
@@ -1179,7 +1248,7 @@ function renderWorkout() {
             <button type="submit">${builder.editingLiftId ? "Restart Set Input" : "Start Set Input"}</button>
           </form>
           ${
-            builder.isConfigured
+            builder.isConfigured && builderMuscleIsValid
               ? `
                 <form id="set-form" class="panel">
                   <h2>Set ${builder.currentSet} of ${builder.setsCount}</h2>
@@ -1203,15 +1272,12 @@ function renderWorkout() {
           <div class="panel">
             <h2>Current Session Lifts</h2>
             ${draft.lifts.length ? renderDraftLifts(draft.lifts) : "<p>No lift added yet.</p>"}
-            <button id="submit-session" class="submit-workout-button" type="button" ${draft.lifts.length ? "" : "disabled"}>${state.busy ? "Saving..." : "Submit Workout Session"}</button>
+            ${hasUnassignedLifts ? `<p class="assignment-warning">Edit each unassigned lift and choose its trained muscle before submitting.</p>` : ""}
+            <button id="submit-session" class="submit-workout-button" type="button" ${draft.lifts.length && !hasUnassignedLifts ? "" : "disabled"}>${state.busy ? "Saving..." : "Submit Workout Session"}</button>
           </div>
         `
         : ""
     }
-    <div class="panel">
-      <h2>Submitted Workouts</h2>
-      ${renderSubmittedSessions()}
-    </div>
   `;
 }
 
@@ -1266,6 +1332,7 @@ function renderDraftLifts(lifts) {
       (lift) => `
         <div class="list-item">
           <strong>${escapeHtml(lift.name)} (${lift.unit})</strong>
+          <span class="lift-muscle-assignment ${lift.muscleGroup ? "" : "unassigned"}">Muscle: ${lift.muscleGroup ? escapeHtml(lift.muscleGroup) : "Not assigned"}</span>
           <span>${lift.sets.length} sets</span>
           <span>${lift.sets.map((set) => `S${set.setNumber}: ${set.reps} reps @ ${set.weight}`).join(" | ")}</span>
           ${state.liftBuilder?.editingLiftId === lift.id ? `<span class="draft-lift-editing">Editing from Set 1</span>` : ""}
@@ -1362,7 +1429,7 @@ function getMuscleDayCounts(range, category) {
 
     if (!include) return;
 
-    [...new Set(session.muscleGroupsSnapshot || [])].forEach((name) => {
+    getSessionTrainedMuscles(session).forEach((name) => {
       if (!muscleDays.has(name)) muscleDays.set(name, new Set());
       muscleDays.get(name).add(session.date);
     });
@@ -1374,12 +1441,10 @@ function getMuscleDayCounts(range, category) {
 }
 
 function getSessionsForMuscle(muscleName) {
-  const normalizedMuscle = String(muscleName || "").trim().toLowerCase();
+  const normalizedMuscle = normalizeMuscleName(muscleName);
   return state.sessions
     .filter((session) =>
-      (session.muscleGroupsSnapshot || []).some(
-        (name) => String(name || "").trim().toLowerCase() === normalizedMuscle
-      )
+      getSessionTrainedMuscles(session).some((name) => normalizeMuscleName(name) === normalizedMuscle)
     )
     .sort((a, b) => {
       const dateOrder = String(b.date).localeCompare(String(a.date));
@@ -1388,10 +1453,11 @@ function getSessionsForMuscle(muscleName) {
     });
 }
 
-function getTrainingTotals(sessions) {
+function getTrainingTotals(sessions, muscleName = "") {
   return sessions.reduce(
     (totals, session) => {
-      (session.lifts || []).forEach((lift) => {
+      const lifts = muscleName ? getSessionLiftsForMuscle(session, muscleName) : session.lifts || [];
+      lifts.forEach((lift) => {
         const sets = lift.sets || [];
         totals.sets += sets.length;
         totals.reps += sets.reduce((sum, set) => sum + (Number(set.reps) || 0), 0);
@@ -1421,8 +1487,8 @@ function renderMuscleAnalyticsDetail() {
     const date = parseIso(session.date);
     return date >= last30Start && date <= today;
   });
-  const last30Totals = getTrainingTotals(last30Sessions);
-  const allTimeTotals = getTrainingTotals(allSessions);
+  const last30Totals = getTrainingTotals(last30Sessions, selection.name);
+  const allTimeTotals = getTrainingTotals(allSessions, selection.name);
   const latestSession = allSessions[0] || null;
   const categoryLabel = selection.category === "secondary" ? "Secondary muscle" : "Primary muscle";
 
@@ -1435,7 +1501,8 @@ function renderMuscleAnalyticsDetail() {
         </div>
         <div>
           <h2>${escapeHtml(selection.name)} Training Detail</h2>
-          <p>Total sets and reps from workout sessions tagged with ${escapeHtml(selection.name)}.</p>
+          <p>Total sets and reps from lifts assigned to ${escapeHtml(selection.name)}.</p>
+          <p class="analytics-data-note">Legacy sessions with multiple muscles and no per-lift assignment remain visible as training days, but are excluded from set and rep totals.</p>
         </div>
         <div class="muscle-total-range-grid">
           ${renderMuscleTotalRange("Last 30 Days", last30Totals)}
@@ -1450,7 +1517,7 @@ function renderMuscleAnalyticsDetail() {
           </div>
           ${latestSession ? `<strong class="latest-muscle-date">${formatDate(latestSession.date)}</strong>` : ""}
         </div>
-        ${latestSession ? renderLatestMuscleSession(latestSession) : `<p>No workout has been recorded for this muscle yet.</p>`}
+        ${latestSession ? renderLatestMuscleSession(latestSession, selection.name) : `<p>No workout has been recorded for this muscle yet.</p>`}
       </section>
     </div>
   `;
@@ -1472,16 +1539,16 @@ function renderMuscleTotalRange(label, totals) {
   `;
 }
 
-function renderLatestMuscleSession(session) {
-  const lifts = session.lifts || [];
-  const totals = getTrainingTotals([session]);
+function renderLatestMuscleSession(session, muscleName) {
+  const lifts = getSessionLiftsForMuscle(session, muscleName);
+  const totals = getTrainingTotals([session], muscleName);
   return `
     <div class="latest-muscle-summary">
       <span>${lifts.length} lift${lifts.length === 1 ? "" : "s"}</span>
       <span>${totals.sets} set${totals.sets === 1 ? "" : "s"}</span>
       <span>${totals.reps} rep${totals.reps === 1 ? "" : "s"}</span>
     </div>
-    <p class="latest-session-muscles">Session muscles: ${(session.muscleGroupsSnapshot || []).map(escapeHtml).join(", ")}</p>
+    <p class="latest-session-muscles">Session muscles: ${getSessionTrainedMuscles(session).map(escapeHtml).join(", ")}</p>
     ${
       lifts.length
         ? lifts
@@ -1510,7 +1577,7 @@ function renderLatestMuscleSession(session) {
               `;
             })
             .join("")
-        : `<p>No lift details were saved in this workout.</p>`
+        : `<p>No lift in this legacy workout can be attributed specifically to ${escapeHtml(muscleName)}.</p>`
     }
   `;
 }
@@ -1597,18 +1664,78 @@ function renderSettings() {
   `;
 }
 
-function renderSubmittedSessions() {
-  if (!state.sessions.length) return "<p>No submitted workouts yet.</p>";
-  return state.sessions
-    .slice(0, 12)
+function getSubmittedWorkoutMonths() {
+  return [...new Set(state.sessions.map((session) => String(session.date).slice(0, 7)).filter(Boolean))].sort().reverse();
+}
+
+function formatWorkoutMonth(monthKey) {
+  const [year, month] = monthKey.split("-").map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+function isWorkoutWithinLast20Days(session) {
+  const ageInDays = Math.floor((parseIso(todayIso()) - parseIso(session.date)) / 86400000);
+  return ageInDays >= 0 && ageInDays < 20;
+}
+
+function renderSubmittedWorkoutsPage() {
+  const months = getSubmittedWorkoutMonths();
+  const validFilters = new Set(["last20", "all", ...months]);
+  const selectedFilter = validFilters.has(state.submittedWorkoutFilter) ? state.submittedWorkoutFilter : "last20";
+  const sessions = state.sessions.filter((session) => {
+    if (selectedFilter === "last20") return isWorkoutWithinLast20Days(session);
+    if (selectedFilter === "all") return true;
+    return String(session.date).startsWith(selectedFilter);
+  });
+
+  return `
+    <div class="submitted-workouts-page">
+      <div class="workout-nav">
+        <button id="back-workout" class="back-button" type="button" aria-label="Back to Add Workout">
+          <span aria-hidden="true">&larr;</span>
+          Back to Add Workout
+        </button>
+      </div>
+      <section class="panel">
+        <div class="submitted-workouts-heading">
+          <div>
+            <h2>Submitted Workouts</h2>
+            <p>Review or delete workouts from the last 20 days, or choose a specific month.</p>
+          </div>
+          <label>Show workouts
+            <select id="submitted-history-filter">
+              <option value="last20" ${selectedFilter === "last20" ? "selected" : ""}>Last 20 days</option>
+              <option value="all" ${selectedFilter === "all" ? "selected" : ""}>All months</option>
+              ${months
+                .map(
+                  (month) =>
+                    `<option value="${month}" ${selectedFilter === month ? "selected" : ""}>${formatWorkoutMonth(month)}</option>`
+                )
+                .join("")}
+            </select>
+          </label>
+        </div>
+        <div class="submitted-workout-list">
+          ${renderSubmittedSessions(sessions)}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderSubmittedSessions(sessions) {
+  if (!sessions.length) return "<p>No submitted workouts found for this filter.</p>";
+  return sessions
     .map(
       (session) => `
-        <div class="list-item">
+        <article class="list-item submitted-workout-item">
           <strong>${formatDate(session.date)}</strong>
-          <span>${session.muscleGroupsSnapshot.join(", ")}</span>
-          <span>${session.lifts.length} lifts</span>
-          <button class="danger" data-delete-session="${session.id}">Delete Workout</button>
-        </div>
+          <span>${getSessionTrainedMuscles(session).map(escapeHtml).join(", ") || "No muscle assigned"}</span>
+          <span>${session.lifts.length} lift${session.lifts.length === 1 ? "" : "s"}</span>
+          <div class="submitted-workout-actions">
+            <button class="danger" data-delete-session="${session.id}">Delete Workout</button>
+          </div>
+        </article>
       `
     )
     .join("");
@@ -1714,6 +1841,33 @@ function bindEvents() {
     });
   }
 
+  const goSubmittedWorkouts = document.getElementById("go-submitted-workouts");
+  if (goSubmittedWorkouts) {
+    goSubmittedWorkouts.addEventListener("click", () => {
+      state.currentView = "submittedWorkouts";
+      queueWorkoutDraftSave();
+      render();
+    });
+  }
+
+  const backWorkout = document.getElementById("back-workout");
+  if (backWorkout) {
+    backWorkout.addEventListener("click", () => {
+      state.currentView = "workout";
+      ensureWorkoutState();
+      queueWorkoutDraftSave();
+      render();
+    });
+  }
+
+  const submittedHistoryFilter = document.getElementById("submitted-history-filter");
+  if (submittedHistoryFilter) {
+    submittedHistoryFilter.addEventListener("change", (event) => {
+      state.submittedWorkoutFilter = event.target.value;
+      render();
+    });
+  }
+
   const goWorkout = document.getElementById("go-workout");
   if (goWorkout) {
     goWorkout.addEventListener("click", () => {
@@ -1772,8 +1926,8 @@ function bindEvents() {
     muscleSelectForm.addEventListener("submit", (event) => {
       event.preventDefault();
       const workoutDate = event.target.elements.workoutDate?.value || state.workoutDraft.date;
-      if (!workoutDate || parseIso(workoutDate) > parseIso(todayIso())) {
-        alert("Choose today or a previous date. Future workout dates are not allowed.");
+      if (![todayIso(), yesterdayIso()].includes(workoutDate)) {
+        alert("Choose Today or Yesterday as the workout date.");
         return;
       }
       const selected = [...event.target.querySelectorAll('input[name="muscles"]:checked')].map((input) => input.value);
@@ -1796,28 +1950,23 @@ function bindEvents() {
       });
     });
 
-    const workoutDateInput = document.getElementById("workout-date-input");
-    if (workoutDateInput) {
-      workoutDateInput.addEventListener("change", (event) => {
-        const nextDate = event.target.value;
+    document.querySelectorAll("[data-workout-date-option]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const nextDate = button.dataset.workoutDateOption;
         const previousDate = state.workoutDraft.date;
-        if (!nextDate || parseIso(nextDate) > parseIso(todayIso())) {
-          event.target.value = previousDate;
-          alert("Future workout dates are not allowed.");
-          return;
-        }
+        if (![todayIso(), yesterdayIso()].includes(nextDate)) return;
         if (
           nextDate !== previousDate &&
           (state.workoutDraft.lifts.length || state.liftBuilder?.isConfigured) &&
           !confirm(`Move this unfinished workout from ${formatDate(previousDate)} to ${formatDate(nextDate)}?`)
         ) {
-          event.target.value = previousDate;
           return;
         }
         state.workoutDraft.date = nextDate;
         queueWorkoutDraftSave();
+        render();
       });
-    }
+    });
   }
 
   const liftConfigForm = document.getElementById("lift-config-form");
@@ -1830,12 +1979,18 @@ function bindEvents() {
         usesCustomSetCount ? event.target.elements.customSetsCount.value : event.target.elements.setsCount.value
       );
       const unit = event.target.elements.unit.value;
+      const muscleGroup = event.target.elements.liftMuscle.value;
+      if (!state.workoutDraft.muscleGroupsSnapshot.includes(muscleGroup)) {
+        alert("Choose which selected muscle this lift trains.");
+        return;
+      }
       if (!liftName || !Number.isInteger(setsCount) || setsCount < 1 || (usesCustomSetCount && setsCount <= 10)) {
         alert("Choose 1-10 sets, or enter a whole number greater than 10.");
         return;
       }
       state.liftBuilder = createLiftBuilder({
         liftName,
+        muscleGroup,
         setsCount,
         unit,
         currentSet: 1,
@@ -1849,6 +2004,11 @@ function bindEvents() {
 
     liftConfigForm.elements.liftName.addEventListener("input", (event) => {
       state.liftBuilder.liftName = event.target.value;
+      queueWorkoutDraftSave();
+    });
+
+    liftConfigForm.elements.liftMuscle.addEventListener("change", (event) => {
+      state.liftBuilder.muscleGroup = event.target.value;
       queueWorkoutDraftSave();
     });
 
@@ -1918,6 +2078,10 @@ function bindEvents() {
       const usesCustomReps = event.target.elements.reps.value === "custom";
       const reps = Number(usesCustomReps ? event.target.elements.customReps.value : event.target.elements.reps.value);
       const weight = Number(event.target.elements.weight.value);
+      if (!state.workoutDraft.muscleGroupsSnapshot.includes(state.liftBuilder.muscleGroup)) {
+        alert("Return to Lift Setup and choose the muscle trained by this lift.");
+        return;
+      }
       if (
         !Number.isInteger(reps) ||
         reps < 1 ||
@@ -1939,6 +2103,7 @@ function bindEvents() {
         const completedLift = {
           id: state.liftBuilder.editingLiftId || crypto.randomUUID(),
           name: state.liftBuilder.liftName,
+          muscleGroup: state.liftBuilder.muscleGroup,
           unit: state.liftBuilder.unit,
           sets: state.liftBuilder.sets,
         };
@@ -1972,6 +2137,7 @@ function bindEvents() {
       if (!lift) return;
       state.liftBuilder = createLiftBuilder({
         liftName: lift.name,
+        muscleGroup: lift.muscleGroup || "",
         setsCount: Math.max(1, lift.sets?.length || 1),
         unit: lift.unit,
         currentSet: 1,
@@ -2002,6 +2168,13 @@ function bindEvents() {
   if (submitSession) {
     submitSession.addEventListener("click", async () => {
       if (!state.workoutDraft?.lifts.length) return;
+      const invalidLift = state.workoutDraft.lifts.find(
+        (lift) => !lift.muscleGroup || !state.workoutDraft.muscleGroupsSnapshot.includes(lift.muscleGroup)
+      );
+      if (invalidLift) {
+        alert(`Edit ${invalidLift.name} and choose which selected muscle it trains before submitting.`);
+        return;
+      }
       await runBusy(async () => {
         const draftSynced = await syncWorkoutDraftToServer({ throwOnError: true });
         let finalizedFromDraft = false;
@@ -2129,6 +2302,8 @@ function bindEvents() {
 
   document.querySelectorAll("[data-delete-session]").forEach((button) => {
     button.addEventListener("click", async () => {
+      const session = state.sessions.find((item) => String(item.id) === String(button.dataset.deleteSession));
+      if (!session) return;
       const confirmed = confirm("Delete this workout? XP and streak stats will update automatically.");
       if (!confirmed) return;
       await runBusy(async () => {
